@@ -59,7 +59,7 @@ impl Debug for Value {
                 .field("body", body)
                 .field("closure", closure)
                 .finish(),
-            Self::BuiltinFunc(_) => f.write_str("<builtin>"),
+            Self::BuiltinFunc(_) => f.write_str("<built-in>"),
         }
     }
 }

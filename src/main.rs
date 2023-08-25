@@ -1,5 +1,7 @@
 use std::io::{stdin, stdout, Write};
 
+use typing::infer;
+
 use crate::{env::Env, parser::parse};
 
 mod ast;
@@ -9,6 +11,7 @@ mod eval;
 mod lexer;
 mod parser;
 mod prelude;
+mod typing;
 mod value;
 
 fn main() {
@@ -46,8 +49,9 @@ fn eval_line(env: &Env, line: &str) -> Result<(String, Env), String> {
             ("ok".to_string(), new_env)
         }
         parser::ParseResult::Expression(expr) => {
-            let res = env.eval_expr(expr)?;
-            (format!("{}", res), env.clone())
+            let type_expr = infer(env, &expr)?;
+            // let res = env.eval_expr(expr)?;
+            (format!("{}", type_expr), env.clone())
         }
     })
 }

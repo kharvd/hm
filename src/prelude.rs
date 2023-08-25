@@ -8,7 +8,7 @@ impl Env {
     pub fn prelude() -> Env {
         let env = Env::new()
             .extend("plus", Value::new_builtin(IntBinOps::Plus))
-            .extend("minus", Value::new_builtin(IntBinOps::Plus))
+            .extend("minus", Value::new_builtin(IntBinOps::Minus))
             .extend("mult", Value::new_builtin(IntBinOps::Mult))
             .extend("div", Value::new_builtin(IntBinOps::Div))
             .extend("lt", Value::new_builtin(IntBinOps::Lt))

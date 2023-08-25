@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::{
     ast::{Expr, Statement},
     env::Env,
@@ -16,13 +18,13 @@ impl Env {
 
 impl Statement {
     fn eval(self, env: &Env) -> Result<Env, String> {
-        match self {
+        Ok(match self {
             Statement::Let(name, expr) => {
                 let value = expr.eval(env)?;
-                Ok(env.extend(&name, value))
+                env.extend(&name, value)
             }
-            Statement::Val(_, _) => Ok(env.clone()),
-        }
+            Statement::Val(name, type_expr) => env.extend_type(&name, Rc::new(type_expr)),
+        })
     }
 }
 
@@ -32,7 +34,7 @@ impl Expr {
             Expr::Int(i) => Ok(Value::Int(*i)),
             Expr::Bool(b) => Ok(Value::Bool(*b)),
             Expr::Ident(name) => {
-                let value = env.resolve(&name)?;
+                let value = env.resolve_value(&name)?;
                 Ok(value.clone())
             }
             Expr::If(cond, if_true, if_false) => {

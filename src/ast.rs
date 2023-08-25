@@ -25,7 +25,7 @@ impl Display for Expr {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum TypeExpr {
     Int,
     Bool,
