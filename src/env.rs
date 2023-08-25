@@ -22,13 +22,13 @@ impl Env {
         }
     }
 
-    pub fn extend(self, name: &str, value: Value) -> Self {
+    pub fn extend(&self, name: &str, value: Value) -> Self {
         Self {
             data: self.data.insert(name.to_string(), value),
         }
     }
 
-    pub fn resolve(self, name: &String) -> Result<Value, String> {
+    pub fn resolve(&self, name: &String) -> Result<Value, String> {
         match self.data.get(name) {
             Some(value) => Ok(value.clone()),
             None => Err(format!("Unknown identifier {}", name)),

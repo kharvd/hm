@@ -5,29 +5,29 @@ use crate::{
 };
 
 impl Env {
-    fn eval_statement(self, stmt: Statement) -> Result<Self, String> {
+    pub fn eval_statement(&self, stmt: Statement) -> Result<Self, String> {
         stmt.eval(self)
     }
 
-    fn eval_expr(self, expr: Expr) -> Result<Value, String> {
+    pub fn eval_expr(&self, expr: Expr) -> Result<Value, String> {
         expr.eval(self)
     }
 }
 
 impl Statement {
-    fn eval(self, env: Env) -> Result<Env, String> {
+    fn eval(self, env: &Env) -> Result<Env, String> {
         match self {
             Statement::Let(name, expr) => {
-                let value = expr.eval(env.clone())?;
+                let value = expr.eval(env)?;
                 Ok(env.extend(&name, value))
             }
-            Statement::Val(_, _) => Ok(env),
+            Statement::Val(_, _) => Ok(env.clone()),
         }
     }
 }
 
 impl Expr {
-    fn eval(&self, env: Env) -> Result<Value, String> {
+    fn eval(&self, env: &Env) -> Result<Value, String> {
         match self {
             Expr::Int(i) => Ok(Value::Int(*i)),
             Expr::Bool(b) => Ok(Value::Bool(*b)),
@@ -36,11 +36,11 @@ impl Expr {
                 Ok(value.clone())
             }
             Expr::If(cond, if_true, if_false) => {
-                let cond = cond.eval(env.clone())?;
+                let cond = cond.eval(env)?;
                 if cond.as_bool()? {
-                    if_true.eval(env.clone()).clone()
+                    if_true.eval(env).clone()
                 } else {
-                    if_false.eval(env.clone()).clone()
+                    if_false.eval(env).clone()
                 }
             }
             Expr::Lambda(param_name, body) => Ok(Value::Func {
@@ -49,19 +49,19 @@ impl Expr {
                 closure: env.clone(),
             }),
             Expr::Ap(func, arg) => {
-                let func_eval = func.eval(env.clone())?;
+                let func_eval = func.eval(env)?;
                 match func_eval {
                     Value::Func {
                         param,
                         body,
                         closure,
                     } => {
-                        let arg_eval = arg.eval(env.clone())?;
+                        let arg_eval = arg.eval(env)?;
                         let inner_env = closure.extend(&param, arg_eval);
-                        body.eval(inner_env)
+                        body.eval(&inner_env)
                     }
                     Value::BuiltinFunc(f) => {
-                        let arg_eval = arg.eval(env.clone())?;
+                        let arg_eval = arg.eval(env)?;
                         f.eval(arg_eval)
                     }
                     _ => Err(format!("Expected function, got {}", func_eval)),
@@ -78,17 +78,14 @@ mod tests {
     use crate::{
         ast::{Expr, Statement},
         eval::{Env, Value},
-        lexer::tokenize,
     };
 
     fn parse_expr(s: &str) -> Expr {
-        let tokens = tokenize(s).unwrap();
-        crate::parser::parse_expr(&mut tokens.into_iter().peekable()).unwrap()
+        crate::parser::parse_expression(s).unwrap()
     }
 
     fn parse_statement(s: &str) -> Statement {
-        let tokens = tokenize(s).unwrap();
-        crate::parser::parse_statement(&mut tokens.into_iter().peekable()).unwrap()
+        crate::parser::parse_statement(s).unwrap()
     }
 
     fn eval(s: &str) -> Value {

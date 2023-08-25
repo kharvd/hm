@@ -2,23 +2,53 @@ use std::iter::Peekable;
 use std::rc::Rc;
 
 use crate::ast::{Expr, Statement, TypeExpr};
-use crate::lexer::{Keyword, Token};
+use crate::lexer::{tokenize, Keyword, Token};
 
-pub fn parse_statements(
+#[derive(Debug)]
+pub enum ParseResult {
+    Statement(Statement),
+    Expression(Expr),
+}
+
+pub fn parse(s: &str) -> Result<ParseResult, String> {
+    let tokens = tokenize(s)?;
+    let mut iter = tokens.into_iter().peekable();
+    match iter.peek() {
+        Some(token) => Ok(match token {
+            Token::Keyword(Keyword::Let) | Token::Keyword(Keyword::Val) => {
+                ParseResult::Statement(parse_stmt(&mut iter)?)
+            }
+            _ => ParseResult::Expression(parse_expr(&mut iter)?),
+        }),
+        None => Err("Empty input".to_string()),
+    }
+}
+
+pub fn parse_expression(s: &str) -> Result<Expr, String> {
+    let tokens = tokenize(s)?;
+    let mut iter = tokens.into_iter().peekable();
+    parse_expr(&mut iter)
+}
+
+pub fn parse_statement(s: &str) -> Result<Statement, String> {
+    let tokens = tokenize(s)?;
+    let mut iter = tokens.into_iter().peekable();
+    parse_stmt(&mut iter)
+}
+
+fn parse_statements(
     tokens: &mut Peekable<impl Iterator<Item = Token>>,
 ) -> Result<Vec<Statement>, String> {
     let mut statements = Vec::new();
 
     while let Some(_) = tokens.peek() {
-        statements.push(parse_statement(tokens)?);
+        statements.push(parse_stmt(tokens)?);
     }
 
     Ok(statements)
 }
 
-pub fn parse_statement(
-    tokens: &mut Peekable<impl Iterator<Item = Token>>,
-) -> Result<Statement, String> {
+pub fn parse_stmt(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<Statement, String> {
     let statement = match tokens.peek() {
         Some(Token::Keyword(Keyword::Let)) => parse_let_statement(tokens)?,
         Some(Token::Keyword(Keyword::Val)) => parse_val_statement(tokens)?,
@@ -60,9 +90,7 @@ fn parse_let_statement(
     Ok(Statement::Let(name, expr))
 }
 
-pub fn parse_type_expr(
-    tokens: &mut Peekable<impl Iterator<Item = Token>>,
-) -> Result<TypeExpr, String> {
+fn parse_type_expr(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<TypeExpr, String> {
     let mut ty = parse_non_arrow_expr(tokens)?;
 
     if let Some(Token::Arrow) = tokens.peek() {
@@ -97,7 +125,7 @@ fn parse_non_arrow_expr(
     Ok(ty)
 }
 
-pub fn parse_expr(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<Expr, String> {
+fn parse_expr(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<Expr, String> {
     let mut expr = parse_non_ap_expr(tokens)?;
 
     while let Some(next) = tokens.peek() {
@@ -172,9 +200,10 @@ mod tests {
     #[test]
     fn test_simple_type() {
         let tokens = lexer::tokenize("int -> bool").unwrap();
+        let mut iter = tokens.into_iter().peekable();
 
         assert_eq!(
-            parse_type_expr(&mut tokens.into_iter().peekable()),
+            parse_type_expr(&mut iter),
             Ok(TypeExpr::Fun(
                 Rc::new(TypeExpr::Int),
                 Rc::new(TypeExpr::Bool)
@@ -185,9 +214,10 @@ mod tests {
     #[test]
     fn test_arrow_left_assoc() {
         let tokens = lexer::tokenize("int -> bool -> int").unwrap();
+        let mut iter = tokens.into_iter().peekable();
 
         assert_eq!(
-            parse_type_expr(&mut tokens.into_iter().peekable()),
+            parse_type_expr(&mut iter),
             Ok(TypeExpr::Fun(
                 Rc::new(TypeExpr::Int),
                 Rc::new(TypeExpr::Fun(
@@ -201,9 +231,10 @@ mod tests {
     #[test]
     fn test_type_var() {
         let tokens = lexer::tokenize("('a -> 'b) -> 'a").unwrap();
+        let mut iter = tokens.into_iter().peekable();
 
         assert_eq!(
-            parse_type_expr(&mut tokens.into_iter().peekable()),
+            parse_type_expr(&mut iter),
             Ok(TypeExpr::Fun(
                 Rc::new(TypeExpr::Fun(
                     Rc::new(TypeExpr::TypeVar("a".to_string())),
@@ -217,9 +248,10 @@ mod tests {
     #[test]
     fn test_simple_expr() {
         let tokens = lexer::tokenize("fun x -> (fun y -> plus x y)").unwrap();
+        let mut iter = tokens.into_iter().peekable();
 
         assert_eq!(
-            parse_expr(&mut tokens.into_iter().peekable()),
+            parse_expr(&mut iter),
             Ok(Expr::Lambda(
                 "x".to_string(),
                 Rc::new(Expr::Lambda(
@@ -239,9 +271,10 @@ mod tests {
     #[test]
     fn test_if_expr() {
         let tokens = lexer::tokenize("if true then mul x y else (fun x -> x) x").unwrap();
+        let mut iter = tokens.into_iter().peekable();
 
         assert_eq!(
-            parse_expr(&mut tokens.into_iter().peekable()),
+            parse_expr(&mut iter),
             Ok(Expr::If(
                 Rc::new(Expr::Bool(true)),
                 Rc::new(Expr::Ap(
@@ -265,9 +298,10 @@ mod tests {
     #[test]
     fn test_let_statement() {
         let tokens = lexer::tokenize("let f = fun x -> x").unwrap();
+        let mut iter = tokens.into_iter().peekable();
 
         assert_eq!(
-            parse_statement(&mut tokens.into_iter().peekable()),
+            parse_stmt(&mut iter),
             Ok(Statement::Let(
                 "f".to_string(),
                 Expr::Lambda("x".to_string(), Rc::new(Expr::Ident("x".to_string())))
@@ -278,9 +312,10 @@ mod tests {
     #[test]
     fn test_program() {
         let tokens = lexer::tokenize("val g : 'a -> 'a\nlet g = fun y -> y").unwrap();
+        let mut iter = tokens.into_iter().peekable();
 
         assert_eq!(
-            parse_statements(&mut tokens.into_iter().peekable()),
+            parse_statements(&mut iter),
             Ok(vec![
                 Statement::Val(
                     "g".to_string(),

@@ -54,7 +54,10 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, String> {
                 }
             }
             '0'..='9' => {
-                let num: String = chars.by_ref().take_while(|ch| ch.is_digit(10)).collect();
+                let num: String = chars
+                    .by_ref()
+                    .peeking_take_while(|ch| ch.is_digit(10))
+                    .collect();
                 if let Ok(i) = num.parse::<i64>() {
                     tokens.push(Token::Int(i));
                 } else {
@@ -167,6 +170,16 @@ mod tests {
                 Token::Arrow,
                 Token::Ident("x".to_string()),
             ])
-        )
+        );
+
+        assert_eq!(
+            tokenize("(neg 1)"),
+            Ok(vec![
+                Token::LParen,
+                Token::Ident("neg".to_string()),
+                Token::Int(1),
+                Token::RParen,
+            ])
+        );
     }
 }
