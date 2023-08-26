@@ -1,5 +1,6 @@
 use std::io::{stdin, stdout, Write};
 
+use eval::StatementEval;
 use typing::infer;
 
 use crate::{env::Env, parser::parse};
@@ -45,13 +46,19 @@ fn eval_line(env: &Env, line: &str) -> Result<(String, Env), String> {
 
     Ok(match parse_result {
         parser::ParseResult::Statement(stmt) => {
-            let new_env = env.eval_statement(stmt)?;
-            ("ok".to_string(), new_env)
+            let StatementEval {
+                new_env,
+                var_name,
+                var_type,
+                value: _,
+            } = env.eval_statement(&stmt)?;
+            (format!("val {} : {}", var_name, var_type), new_env)
         }
         parser::ParseResult::Expression(expr) => {
             let type_expr = infer(env, &expr)?;
-            // let res = env.eval_expr(expr)?;
-            (format!("{}", type_expr), env.clone())
+            println!("{} : {}", expr, type_expr);
+            let res = env.eval_expr(&expr)?;
+            (format!("{} : {}", res, type_expr), env.clone())
         }
     })
 }

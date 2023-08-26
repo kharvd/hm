@@ -71,23 +71,47 @@ fn parse_val_statement(
         _ => return Err("Expected ':' after identifier".to_string()),
     }
     let ty = parse_type_expr(tokens)?;
-    Ok(Statement::Val(name, ty))
+    Ok(Statement::Val(name, Rc::new(ty)))
 }
 
 fn parse_let_statement(
     tokens: &mut Peekable<impl Iterator<Item = Token>>,
 ) -> Result<Statement, String> {
     tokens.next();
+
+    match tokens.peek() {
+        Some(Token::Keyword(Keyword::Rec)) => parse_let_rec_statement(tokens),
+        Some(Token::Ident(_)) => {
+            let (name, expr) = parse_let_name_binding(tokens)?;
+            Ok(Statement::Let(name, expr))
+        }
+        _ => return Err("Expected identifier or 'rec' after 'let'".to_string()),
+    }
+}
+
+fn parse_let_rec_statement(
+    tokens: &mut Peekable<impl Iterator<Item = Token>>,
+) -> Result<Statement, String> {
+    tokens.next();
+
+    let (name, expr) = parse_let_name_binding(tokens)?;
+    Ok(Statement::LetRec(name, expr))
+}
+
+fn parse_let_name_binding(
+    tokens: &mut Peekable<impl Iterator<Item = Token>>,
+) -> Result<(String, Rc<Expr>), String> {
     let name = match tokens.next() {
         Some(Token::Ident(name)) => name,
         _ => return Err("Expected identifier after 'let'".to_string()),
     };
+
     match tokens.next() {
         Some(Token::Equals) => (),
         _ => return Err("Expected '=' after identifier".to_string()),
     }
     let expr = parse_expr(tokens)?;
-    Ok(Statement::Let(name, expr))
+    Ok((name, Rc::new(expr)))
 }
 
 fn parse_type_expr(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<TypeExpr, String> {
@@ -304,7 +328,10 @@ mod tests {
             parse_stmt(&mut iter),
             Ok(Statement::Let(
                 "f".to_string(),
-                Expr::Lambda("x".to_string(), Rc::new(Expr::Ident("x".to_string())))
+                Rc::new(Expr::Lambda(
+                    "x".to_string(),
+                    Rc::new(Expr::Ident("x".to_string()))
+                ))
             ))
         );
     }
@@ -319,14 +346,17 @@ mod tests {
             Ok(vec![
                 Statement::Val(
                     "g".to_string(),
-                    TypeExpr::Fun(
+                    Rc::new(TypeExpr::Fun(
                         Rc::new(TypeExpr::TypeVar("a".to_string())),
                         Rc::new(TypeExpr::TypeVar("a".to_string()))
-                    )
+                    ))
                 ),
                 Statement::Let(
                     "g".to_string(),
-                    Expr::Lambda("y".to_string(), Rc::new(Expr::Ident("y".to_string())))
+                    Rc::new(Expr::Lambda(
+                        "y".to_string(),
+                        Rc::new(Expr::Ident("y".to_string()))
+                    ))
                 )
             ])
         );

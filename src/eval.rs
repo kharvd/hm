@@ -1,29 +1,58 @@
 use std::rc::Rc;
 
 use crate::{
-    ast::{Expr, Statement},
+    ast::{Expr, Statement, TypeExpr},
     env::Env,
+    typing::infer,
     value::Value,
 };
 
+pub struct StatementEval {
+    pub new_env: Env,
+    pub var_name: String,
+    pub var_type: Rc<TypeExpr>,
+    pub value: Option<Value>,
+}
+
 impl Env {
-    pub fn eval_statement(&self, stmt: Statement) -> Result<Self, String> {
+    pub fn eval_statement(&self, stmt: &Statement) -> Result<StatementEval, String> {
         stmt.eval(self)
     }
 
-    pub fn eval_expr(&self, expr: Expr) -> Result<Value, String> {
+    pub fn eval_expr(&self, expr: &Expr) -> Result<Value, String> {
         expr.eval(self)
     }
 }
 
 impl Statement {
-    fn eval(self, env: &Env) -> Result<Env, String> {
+    fn eval(&self, env: &Env) -> Result<StatementEval, String> {
         Ok(match self {
             Statement::Let(name, expr) => {
+                let var_type = infer(env, &expr)?;
                 let value = expr.eval(env)?;
-                env.extend(&name, value)
+                StatementEval {
+                    new_env: env
+                        .extend_type(&name, var_type.clone())
+                        .extend(&name, value.clone()),
+                    var_name: name.clone(),
+                    var_type: var_type,
+                    value: Some(value),
+                }
             }
-            Statement::Val(name, type_expr) => env.extend_type(&name, Rc::new(type_expr)),
+            Statement::LetRec(name, expr) => Statement::Let(
+                name.clone(),
+                Rc::new(Expr::Ap(
+                    Rc::new(Expr::Ident("fix".to_string())),
+                    Rc::new(Expr::Lambda(name.clone(), expr.clone())),
+                )),
+            )
+            .eval(env)?,
+            Statement::Val(name, type_expr) => StatementEval {
+                new_env: env.extend_type(&name, type_expr.clone()),
+                var_name: name.clone(),
+                var_type: type_expr.clone(),
+                value: None,
+            },
         })
     }
 }
@@ -66,6 +95,37 @@ impl Expr {
                         let arg_eval = arg.eval(env)?;
                         f.eval(arg_eval)
                     }
+                    Value::Fix => {
+                        let arg_eval = arg.eval(env)?;
+                        match arg_eval {
+                            Value::Func {
+                                param,
+                                body,
+                                closure,
+                            } => Ok(Value::RecFunc {
+                                name: param.clone(),
+                                body: body.clone(),
+                                closure: closure.clone(),
+                            }),
+                            _ => Err(format!("Unexpected argument to fix: {}", arg)),
+                        }
+                    }
+                    Value::RecFunc {
+                        name,
+                        body,
+                        closure,
+                    } => {
+                        let body_env = env.extend(
+                            &name,
+                            Value::RecFunc {
+                                name: name.clone(),
+                                body: body.clone(),
+                                closure: closure.clone(),
+                            },
+                        );
+                        let ap_expr = Expr::Ap(body, arg.clone());
+                        ap_expr.eval(&body_env)
+                    }
                     _ => Err(format!("Expected function, got {}", func_eval)),
                 }
             }
@@ -95,12 +155,12 @@ mod tests {
     }
 
     fn eval_env(env: Env, s: &str) -> Value {
-        env.eval_expr(parse_expr(s)).unwrap()
+        env.eval_expr(&parse_expr(s)).unwrap()
     }
 
     fn eval_statements(env: Env, statements: Vec<&str>) -> Env {
         statements.iter().fold(env, |env, s| {
-            env.eval_statement(parse_statement(s)).unwrap()
+            env.eval_statement(&parse_statement(s)).unwrap().new_env
         })
     }
 

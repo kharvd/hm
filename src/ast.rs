@@ -46,14 +46,16 @@ impl Display for TypeExpr {
 
 #[derive(Debug, PartialEq)]
 pub enum Statement {
-    Let(String, Expr),
-    Val(String, TypeExpr),
+    Let(String, Rc<Expr>),
+    LetRec(String, Rc<Expr>),
+    Val(String, Rc<TypeExpr>),
 }
 
 impl Display for Statement {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Statement::Let(name, expr) => write!(f, "let {} = {}", name, expr),
+            Statement::LetRec(name, expr) => write!(f, "let rec {} = {}", name, expr),
             Statement::Val(name, ty) => write!(f, "val {} : {}", name, ty),
         }
     }
@@ -110,13 +112,13 @@ mod tests {
     fn display_let_statement() {
         let stmt = Statement::Let(
             "f".to_string(),
-            Expr::Lambda(
+            Rc::new(Expr::Lambda(
                 "x".to_string(),
                 Rc::new(Expr::Ap(
                     Rc::new(Expr::Ident("f".to_string())),
                     Rc::new(Expr::Ident("x".to_string())),
                 )),
-            ),
+            )),
         );
         assert_eq!(format!("{}", stmt), "let f = (fun x -> (f x))");
     }
@@ -125,10 +127,10 @@ mod tests {
     fn display_val_statement() {
         let stmt = Statement::Val(
             "f".to_string(),
-            TypeExpr::Fun(
+            Rc::new(TypeExpr::Fun(
                 Rc::new(TypeExpr::TypeVar("a".to_string())),
                 Rc::new(TypeExpr::TypeVar("a".to_string())),
-            ),
+            )),
         );
         assert_eq!(format!("{}", stmt), "val f : ('a -> 'a)");
     }

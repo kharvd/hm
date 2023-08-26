@@ -18,6 +18,12 @@ pub enum Value {
         body: Rc<Expr>,
         closure: Env,
     },
+    RecFunc {
+        name: String,
+        body: Rc<Expr>,
+        closure: Env,
+    },
+    Fix,
     BuiltinFunc(Rc<dyn BuiltinFunc>),
 }
 
@@ -38,7 +44,20 @@ impl PartialEq for Value {
                     closure: r_closure,
                 },
             ) => l_param == r_param && l_body == r_body && l_closure == r_closure,
+            (
+                Self::RecFunc {
+                    name: l_name,
+                    body: l_body,
+                    closure: l_closure,
+                },
+                Self::RecFunc {
+                    name: r_name,
+                    body: r_body,
+                    closure: r_closure,
+                },
+            ) => l_name == r_name && l_body == r_body && l_closure == r_closure,
             (Self::BuiltinFunc(_), Self::BuiltinFunc(_)) => false,
+            (Self::Fix, Self::Fix) => true,
             _ => false,
         }
     }
@@ -60,6 +79,17 @@ impl Debug for Value {
                 .field("closure", closure)
                 .finish(),
             Self::BuiltinFunc(_) => f.write_str("<built-in>"),
+            Self::RecFunc {
+                name,
+                body,
+                closure,
+            } => f
+                .debug_struct("Func")
+                .field("name", name)
+                .field("body", body)
+                .field("closure", closure)
+                .finish(),
+            Self::Fix => f.write_str("Fix"),
         }
     }
 }
@@ -70,7 +100,9 @@ impl Display for Value {
             Value::Int(n) => write!(f, "{}", n),
             Value::Bool(b) => write!(f, "{}", b),
             Value::Func { param, body, .. } => write!(f, "(fun {} -> {})", param, body),
+            Value::RecFunc { name, body, .. } => write!(f, "(let rec {} = {})", name, body),
             Value::BuiltinFunc(_) => write!(f, "<builtin>"),
+            Value::Fix => write!(f, "fix"),
         }
     }
 }

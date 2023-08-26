@@ -4,6 +4,7 @@ use itertools::Itertools;
 pub enum Keyword {
     Fun,
     Let,
+    Rec,
     Val,
     If,
     Then,
@@ -42,6 +43,7 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, String> {
                 match ident.as_str() {
                     "fun" => tokens.push(Token::Keyword(Keyword::Fun)),
                     "let" => tokens.push(Token::Keyword(Keyword::Let)),
+                    "rec" => tokens.push(Token::Keyword(Keyword::Rec)),
                     "val" => tokens.push(Token::Keyword(Keyword::Val)),
                     "if" => tokens.push(Token::Keyword(Keyword::If)),
                     "then" => tokens.push(Token::Keyword(Keyword::Then)),
