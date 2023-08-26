@@ -24,28 +24,10 @@ pub fn parse(s: &str) -> Result<ParseResult, String> {
     }
 }
 
-pub fn parse_expression(s: &str) -> Result<Expr, String> {
-    let tokens = tokenize(s)?;
-    let mut iter = tokens.into_iter().peekable();
-    parse_expr(&mut iter)
-}
-
 pub fn parse_statement(s: &str) -> Result<Statement, String> {
     let tokens = tokenize(s)?;
     let mut iter = tokens.into_iter().peekable();
     parse_stmt(&mut iter)
-}
-
-fn parse_statements(
-    tokens: &mut Peekable<impl Iterator<Item = Token>>,
-) -> Result<Vec<Statement>, String> {
-    let mut statements = Vec::new();
-
-    while let Some(_) = tokens.peek() {
-        statements.push(parse_stmt(tokens)?);
-    }
-
-    Ok(statements)
 }
 
 pub fn parse_stmt(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<Statement, String> {
@@ -333,32 +315,6 @@ mod tests {
                     Rc::new(Expr::Ident("x".to_string()))
                 ))
             ))
-        );
-    }
-
-    #[test]
-    fn test_program() {
-        let tokens = lexer::tokenize("val g : 'a -> 'a\nlet g = fun y -> y").unwrap();
-        let mut iter = tokens.into_iter().peekable();
-
-        assert_eq!(
-            parse_statements(&mut iter),
-            Ok(vec![
-                Statement::Val(
-                    "g".to_string(),
-                    Rc::new(TypeExpr::Fun(
-                        Rc::new(TypeExpr::TypeVar("a".to_string())),
-                        Rc::new(TypeExpr::TypeVar("a".to_string()))
-                    ))
-                ),
-                Statement::Let(
-                    "g".to_string(),
-                    Rc::new(Expr::Lambda(
-                        "y".to_string(),
-                        Rc::new(Expr::Ident("y".to_string()))
-                    ))
-                )
-            ])
         );
     }
 }

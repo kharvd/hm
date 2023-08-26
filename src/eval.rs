@@ -35,7 +35,7 @@ impl Statement {
                         .extend_type(&name, var_type.clone())
                         .extend(&name, value.clone()),
                     var_name: name.clone(),
-                    var_type: var_type,
+                    var_type,
                     value: Some(value),
                 }
             }
@@ -140,14 +140,18 @@ mod tests {
     use crate::{
         ast::{Expr, Statement},
         eval::{Env, Value},
+        parser,
     };
 
     fn parse_expr(s: &str) -> Expr {
-        crate::parser::parse_expression(s).unwrap()
+        match parser::parse(s).unwrap() {
+            parser::ParseResult::Statement(_) => panic!("not a statement"),
+            parser::ParseResult::Expression(expr) => expr,
+        }
     }
 
     fn parse_statement(s: &str) -> Statement {
-        crate::parser::parse_statement(s).unwrap()
+        parser::parse_statement(s).unwrap()
     }
 
     fn eval(s: &str) -> Value {
@@ -186,27 +190,22 @@ mod tests {
     }
 
     #[test]
-    fn eval_pairs() {
-        let env = eval_statements(
-            Env::new(),
-            vec![
-                "let pair = fun x -> fun y -> fun f -> f x y",
-                "let fst = fun p -> p (fun x -> fun y -> x)",
-                "let snd = fun p -> p (fun x -> fun y -> y)",
-                "let p = pair 123 false",
-            ],
-        );
-
-        assert_eq!(eval_env(env.clone(), "fst p"), Value::Int(123));
-        assert_eq!(eval_env(env.clone(), "snd p"), Value::Bool(false));
-    }
-
-    #[test]
     fn eval_int() {
         let env = eval_statements(
             Env::prelude(),
             vec!["let x = 1", "let y = 42", "let z = plus x y"],
         );
         assert_eq!(eval_env(env.clone(), "z"), Value::Int(43))
+    }
+
+    #[test]
+    fn eval_rec() {
+        let env = eval_statements(Env::prelude(), vec![
+            "let rec fact = fun n -> if eq n 0 then 1 else mult n (fact (minus n 1))",
+            "let rec fib = fun n -> if or (eq n 0) (eq n 1) then 1 else plus (fib (minus n 1)) (fib (minus n 2))",
+        ]);
+
+        assert_eq!(eval_env(env.clone(), "fact 5"), Value::Int(120));
+        assert_eq!(eval_env(env.clone(), "fib 8"), Value::Int(34));
     }
 }

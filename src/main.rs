@@ -56,7 +56,6 @@ fn eval_line(env: &Env, line: &str) -> Result<(String, Env), String> {
         }
         parser::ParseResult::Expression(expr) => {
             let type_expr = infer(env, &expr)?;
-            println!("{} : {}", expr, type_expr);
             let res = env.eval_expr(&expr)?;
             (format!("{} : {}", res, type_expr), env.clone())
         }
