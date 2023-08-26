@@ -257,3 +257,61 @@ fn reduce(constraint: Constraint) -> Result<Reduction, String> {
         _ => Err(format!("Failed to unify constraint {}", constraint)),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::rc::Rc;
+
+    use crate::{
+        ast::{Expr, TypeExpr},
+        env::Env,
+        lexer::tokenize,
+        parser,
+    };
+
+    use super::infer;
+
+    fn parse_expr(s: &str) -> Expr {
+        match parser::parse(s).unwrap() {
+            parser::ParseResult::Statement(_) => panic!("not an expression"),
+            parser::ParseResult::Expression(expr) => expr,
+        }
+    }
+
+    fn parse_type_expr(s: &str) -> TypeExpr {
+        let tokens = tokenize(s).unwrap();
+        let mut iter = tokens.into_iter().peekable();
+        crate::parser::parse_type_expr(&mut iter).unwrap()
+    }
+
+    fn infer_type(env: &Env, s: &str) -> Rc<TypeExpr> {
+        infer(env, &parse_expr(s)).unwrap().to_owned()
+    }
+
+    #[test]
+    fn test_simple() {
+        let env = Env::prelude();
+        assert_eq!(infer_type(&env, "5"), Rc::new(TypeExpr::Int));
+        assert_eq!(infer_type(&env, "true"), Rc::new(TypeExpr::Bool));
+        assert_eq!(
+            infer_type(&env, "fun x -> plus x 1"),
+            Rc::new(TypeExpr::Fun(
+                Rc::new(TypeExpr::Int),
+                Rc::new(TypeExpr::Int)
+            ))
+        );
+    }
+
+    #[test]
+    fn test_polymorphic() {
+        let env = Env::prelude().extend_type("id", Rc::new(parse_type_expr("'a -> 'a")));
+        assert_eq!(infer_type(&env, "id 5"), Rc::new(TypeExpr::Int));
+        assert_eq!(
+            infer_type(&env, "id neg"),
+            Rc::new(TypeExpr::Fun(
+                Rc::new(TypeExpr::Int),
+                Rc::new(TypeExpr::Int)
+            ))
+        );
+    }
+}

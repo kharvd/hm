@@ -96,7 +96,9 @@ fn parse_let_name_binding(
     Ok((name, Rc::new(expr)))
 }
 
-fn parse_type_expr(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<TypeExpr, String> {
+pub fn parse_type_expr(
+    tokens: &mut Peekable<impl Iterator<Item = Token>>,
+) -> Result<TypeExpr, String> {
     let mut ty = parse_non_arrow_expr(tokens)?;
 
     if let Some(Token::Arrow) = tokens.peek() {

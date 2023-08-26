@@ -145,7 +145,7 @@ mod tests {
 
     fn parse_expr(s: &str) -> Expr {
         match parser::parse(s).unwrap() {
-            parser::ParseResult::Statement(_) => panic!("not a statement"),
+            parser::ParseResult::Statement(_) => panic!("not an expression"),
             parser::ParseResult::Expression(expr) => expr,
         }
     }
