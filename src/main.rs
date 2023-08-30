@@ -46,13 +46,8 @@ fn eval_line(env: &Env, line: &str) -> Result<(String, Env), String> {
 
     Ok(match parse_result {
         parser::ParseResult::Statement(stmt) => {
-            let StatementEval {
-                new_env,
-                var_name,
-                var_type,
-                value: _,
-            } = env.eval_statement(&stmt)?;
-            (format!("val {} : {}", var_name, var_type), new_env)
+            let StatementEval { new_env, statement } = env.eval_statement(&stmt)?;
+            (format!("{}", statement), new_env)
         }
         parser::ParseResult::Expression(expr) => {
             let type_expr = infer(env, &expr)?;

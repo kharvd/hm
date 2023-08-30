@@ -142,7 +142,7 @@ impl Display for TypeExpr {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Statement {
     Let(String, Rc<Expr>),
     LetRec(String, Rc<Expr>),

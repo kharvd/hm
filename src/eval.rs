@@ -1,4 +1,4 @@
-use std::borrow::Borrow;
+use std::{borrow::Borrow, rc::Rc};
 
 use crate::{
     ast::{Expr, Statement, TypeExpr},
@@ -9,14 +9,15 @@ use crate::{
 
 pub struct StatementEval {
     pub new_env: Env,
-    pub var_name: String,
-    pub var_type: TypeExpr,
-    pub value: Option<Value>,
+    pub statement: Statement,
 }
 
 impl Env {
     pub fn eval_statement(&self, stmt: &Statement) -> Result<StatementEval, String> {
-        stmt.eval(self)
+        Ok(StatementEval {
+            new_env: stmt.eval(self)?,
+            statement: stmt.clone(),
+        })
     }
 
     pub fn eval_expr(&self, expr: &Expr) -> Result<Value, String> {
@@ -25,25 +26,18 @@ impl Env {
 }
 
 impl Statement {
-    fn eval(&self, env: &Env) -> Result<StatementEval, String> {
+    fn eval(&self, env: &Env) -> Result<Env, String> {
         Ok(match self {
             Statement::Let(name, expr) => {
                 let var_type = infer(env, &expr)?;
                 let value = expr.eval(env)?;
-                StatementEval {
-                    new_env: env
-                        .extend_type(&name, var_type.clone())
-                        .extend(&name, value.clone()),
-                    var_name: name.clone(),
-                    var_type,
-                    value: Some(value),
-                }
+                env.extend_type(&name, var_type.clone())
+                    .extend(&name, value.clone())
             }
-            Statement::LetRec(name, expr) => Statement::let_(
-                name,
-                Expr::ap(Expr::ident("fix"), Expr::lambda(name, (**expr).clone())),
-            )
-            .eval(env)?,
+            Statement::LetRec(name, expr) => {
+                let binding = Expr::ap(Expr::ident("fix"), Expr::lambda(name, (**expr).clone()));
+                Statement::let_(name, binding).eval(env)?
+            }
             Statement::Val(name, type_expr) => {
                 let generalized_type_expr = match type_expr.borrow() {
                     TypeExpr::Forall(vars, expr) => {
@@ -62,31 +56,53 @@ impl Statement {
                     }
                 };
 
-                StatementEval {
-                    new_env: env.extend_type(&name, generalized_type_expr.clone()),
-                    var_name: name.clone(),
-                    var_type: generalized_type_expr,
-                    value: None,
-                }
+                env.extend_type(&name, generalized_type_expr.clone())
             }
-            Statement::Data(name, args, variants) => {
-                // let mut new_env = env.clone();
-                // for variant in variants {
-                //     new_env = new_env
-                //         .extend_type(&variant, TypeExpr::constructor(name, vec![]))
-                //         .extend(variant, Value::Data(variant.clone(), vec![]));
-                // }
+            Statement::Data(name, params, variants) => {
+                let mut new_env = env.clone();
 
-                // StatementEval {
-                //     new_env,
-                //     var_name: name.clone(),
-                //     var_type: TypeExpr::constructor(name, vec![]),
-                //     value: None,
-                // }
-                todo!()
+                for variant in variants {
+                    let (constructor_name, constructor_type) =
+                        constructor_for_variant(variant, name, params)?;
+                    new_env = new_env
+                        .extend(
+                            &constructor_name,
+                            Value::Data(constructor_name.clone(), vec![]),
+                        )
+                        .extend_type(&constructor_name, constructor_type);
+                }
+
+                new_env
             }
         })
     }
+}
+
+fn constructor_for_variant(
+    variant: &TypeExpr,
+    name: &String,
+    params: &Vec<String>,
+) -> Result<(String, TypeExpr), String> {
+    let (constructor_name, constructor_type) = match variant {
+        TypeExpr::Constructor(constructor_name, args) => {
+            let mut constructor_type = TypeExpr::constructor(
+                name,
+                params.into_iter().map(|p| TypeExpr::type_var(p)).collect(),
+            );
+            for arg in args.iter().rev() {
+                constructor_type = TypeExpr::Fun(arg.clone(), Rc::new(constructor_type));
+            }
+            constructor_type = TypeExpr::Forall(
+                params.into_iter().map(|p| p.clone()).collect(),
+                Rc::new(constructor_type),
+            );
+            constructor_type = constructor_type.normalize();
+
+            Ok((constructor_name, constructor_type))
+        }
+        v => Err(format!("Variant should be a constructor, but got {}", v)),
+    }?;
+    Ok((constructor_name.clone(), constructor_type))
 }
 
 impl Expr {
@@ -262,7 +278,7 @@ mod tests {
     }
 
     #[test]
-    fn eval_data() {
+    fn eval_data_simple() {
         let env = eval_statements(
             Env::prelude(),
             vec![
@@ -282,6 +298,37 @@ mod tests {
         assert_eq!(
             eval_env(env.clone(), "f (neg 5)"),
             Value::Data("Negative".to_string(), vec![])
+        );
+    }
+
+    #[test]
+    fn eval_parameterized_data() {
+        let env = eval_statements(
+            Env::prelude(),
+            vec![
+                "data List 'a = Nil | Cons 'a (List 'a)",
+                "let l = Cons 1 (Cons 2 (Cons 3 Nil))",
+            ],
+        );
+
+        assert_eq!(
+            eval_env(env.clone(), "l"),
+            Value::Data(
+                "Cons".to_string(),
+                vec![
+                    Value::Int(1),
+                    Value::Data(
+                        "Cons".to_string(),
+                        vec![
+                            Value::Int(2),
+                            Value::Data(
+                                "Cons".to_string(),
+                                vec![Value::Int(3), Value::Data("Nil".to_string(), vec![])]
+                            )
+                        ]
+                    )
+                ]
+            )
         );
     }
 }
