@@ -71,7 +71,7 @@ pub enum TypeExpr {
     Fun(Rc<TypeExpr>, Rc<TypeExpr>),
     TypeVar(String),
     Forall(RedBlackTreeSet<String>, Rc<TypeExpr>),
-    Ident(String),
+    Constructor(String, Vec<Rc<TypeExpr>>),
 }
 
 impl TypeExpr {
@@ -84,8 +84,11 @@ impl TypeExpr {
         Self::TypeVar(name.to_string())
     }
 
-    pub fn ident(name: &str) -> Self {
-        Self::Ident(name.to_string())
+    pub fn constructor(name: &str, arguments: Vec<TypeExpr>) -> Self {
+        Self::Constructor(
+            name.to_string(),
+            arguments.into_iter().map(Rc::new).collect(),
+        )
     }
 
     pub fn forall(vars: RedBlackTreeSet<String>, ty: TypeExpr) -> Self {
@@ -120,7 +123,21 @@ impl Display for TypeExpr {
                     )
                 }
             }
-            TypeExpr::Ident(name) => write!(f, "{}", name),
+            TypeExpr::Constructor(name, args) => {
+                if args.is_empty() {
+                    write!(f, "{}", name)
+                } else {
+                    write!(
+                        f,
+                        "({} {})",
+                        name,
+                        args.iter()
+                            .map(|x| x.to_string())
+                            .collect::<Vec<_>>()
+                            .join(" ")
+                    )
+                }
+            }
         }
     }
 }

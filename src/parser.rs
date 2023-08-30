@@ -194,7 +194,7 @@ fn parse_non_arrow_expr(
             Some(Token::Ident(name)) => TypeExpr::TypeVar(name),
             _ => return Err("Expected identifier after apostrophe".to_string()),
         },
-        Some(Token::Ident(name)) => TypeExpr::Ident(name),
+        Some(Token::Ident(name)) => parse_type_constructor(name, tokens)?,
         Some(Token::Keyword(Keyword::Int)) => TypeExpr::Int,
         Some(Token::Keyword(Keyword::Bool)) => TypeExpr::Bool,
         Some(Token::LParen) => {
@@ -208,6 +208,36 @@ fn parse_non_arrow_expr(
     };
 
     Ok(ty)
+}
+
+fn parse_type_constructor(
+    name: String,
+    tokens: &mut Peekable<impl Iterator<Item = Token>>,
+) -> Result<TypeExpr, String> {
+    let mut args = Vec::new();
+    loop {
+        match tokens.peek() {
+            Some(Token::Apostrophe) => {
+                tokens.next();
+                match tokens.next() {
+                    Some(Token::Ident(name)) => args.push(Rc::new(TypeExpr::TypeVar(name))),
+                    _ => return Err("Expected identifier after apostrophe".to_string()),
+                }
+            }
+            Some(Token::LParen) => {
+                tokens.next();
+                let arg = Rc::new(parse_arrow_type_expr(tokens)?);
+                args.push(arg);
+                match tokens.next() {
+                    Some(Token::RParen) => (),
+                    _ => return Err("Expected closing parenthesis".to_string()),
+                }
+            }
+            _ => break,
+        }
+    }
+
+    Ok(TypeExpr::Constructor(name, args))
 }
 
 fn parse_expr(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<Expr, String> {
@@ -321,15 +351,41 @@ mod tests {
     }
 
     #[test]
-    fn test_type_ident() {
+    fn test_type_constructor_simple() {
         let tokens = lexer::tokenize("MyType -> bool").unwrap();
         let mut iter = tokens.into_iter().peekable();
 
         assert_eq!(
             parse_type_expr(&mut iter),
             Ok(TypeExpr::fun(
-                TypeExpr::Ident("MyType".to_string()),
+                TypeExpr::Constructor("MyType".to_string(), vec![]),
                 TypeExpr::Bool
+            ))
+        );
+    }
+
+    #[test]
+    fn test_type_constructor_args() {
+        let tokens = lexer::tokenize("int -> MyType 'a (MyOtherType -> 'b) -> bool").unwrap();
+        let mut iter = tokens.into_iter().peekable();
+
+        assert_eq!(
+            parse_type_expr(&mut iter),
+            Ok(TypeExpr::fun(
+                TypeExpr::Int,
+                TypeExpr::fun(
+                    TypeExpr::constructor(
+                        "MyType",
+                        vec![
+                            TypeExpr::TypeVar("a".to_string()),
+                            TypeExpr::fun(
+                                TypeExpr::constructor("MyOtherType", vec![]),
+                                TypeExpr::type_var("b")
+                            )
+                        ]
+                    ),
+                    TypeExpr::Bool
+                )
             ))
         );
     }

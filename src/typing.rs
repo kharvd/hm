@@ -239,7 +239,7 @@ impl TypeExpr {
         match self {
             TypeExpr::Int => true,
             TypeExpr::Bool => true,
-            TypeExpr::Ident(_) => true,
+            TypeExpr::Constructor(_, args) => args.iter().all(|arg| arg.is_free(name)),
             TypeExpr::Fun(t1, t2) => t1.is_free(name) && t2.is_free(name),
             TypeExpr::TypeVar(other_name) => name != other_name,
             TypeExpr::Forall(vars, ty) => {
@@ -254,7 +254,10 @@ impl TypeExpr {
 
     fn substitute(&self, sub: &Substitution) -> Self {
         match self {
-            TypeExpr::Int | TypeExpr::Bool | TypeExpr::Ident(_) => self.clone(),
+            TypeExpr::Int | TypeExpr::Bool => self.clone(),
+            TypeExpr::Constructor(name, args) => {
+                TypeExpr::constructor(name, args.iter().map(|arg| arg.substitute(sub)).collect())
+            }
             TypeExpr::Fun(t1, t2) => TypeExpr::fun(t1.substitute(sub), t2.substitute(sub)),
             TypeExpr::TypeVar(name) => {
                 if name == &sub.0 {
@@ -275,7 +278,16 @@ impl TypeExpr {
 
     pub fn free_variables(&self) -> RedBlackTreeSet<String> {
         match self {
-            TypeExpr::Int | TypeExpr::Bool | TypeExpr::Ident(_) => RedBlackTreeSet::new(),
+            TypeExpr::Int | TypeExpr::Bool => RedBlackTreeSet::new(),
+            TypeExpr::Constructor(_, args) => {
+                let mut vars = RedBlackTreeSet::new();
+                for arg in args.iter() {
+                    for var in arg.free_variables().iter() {
+                        vars = vars.insert(var.clone());
+                    }
+                }
+                vars
+            }
             TypeExpr::Fun(t1, t2) => {
                 let vars1 = t1.free_variables();
                 let vars2 = t2.free_variables();
@@ -365,7 +377,6 @@ impl Reduction {
 fn reduce(constraint: Constraint) -> Result<Reduction, String> {
     match (constraint.lhs, constraint.rhs) {
         (TypeExpr::Int, TypeExpr::Int) | (TypeExpr::Bool, TypeExpr::Bool) => Ok(Reduction::empty()),
-        (TypeExpr::Ident(x), TypeExpr::Ident(y)) if x == y => Ok(Reduction::empty()),
         (TypeExpr::TypeVar(x), TypeExpr::TypeVar(y)) => {
             if x == y {
                 Ok(Reduction::empty())
@@ -377,6 +388,15 @@ fn reduce(constraint: Constraint) -> Result<Reduction, String> {
             Constraint::new((*t1).clone(), (*t3).clone()),
             Constraint::new((*t2).clone(), (*t4).clone()),
         ])),
+        (TypeExpr::Constructor(name1, args1), TypeExpr::Constructor(name2, args2))
+            if name1 == name2 && args1.len() == args2.len() =>
+        {
+            let mut new_constraints = Vec::new();
+            for (arg1, arg2) in args1.into_iter().zip(args2.into_iter()) {
+                new_constraints.push(Constraint::new((*arg1).clone(), (*arg2).clone()));
+            }
+            Ok(Reduction::constraint(new_constraints))
+        }
         (TypeExpr::TypeVar(x), rhs) if rhs.is_free(&x) => Ok(Reduction::substitution((x, rhs))),
         (lhs, TypeExpr::TypeVar(x)) if lhs.is_free(&x) => Ok(Reduction::substitution((x, lhs))),
         (lhs, rhs) => Err(format!("Failed to unify constraint {} = {}", lhs, rhs)),
