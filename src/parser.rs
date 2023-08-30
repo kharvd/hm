@@ -228,8 +228,6 @@ fn parse_let_expr(
 
 #[cfg(test)]
 mod tests {
-    use std::rc::Rc;
-
     use crate::lexer;
 
     use super::*;
@@ -241,10 +239,7 @@ mod tests {
 
         assert_eq!(
             parse_type_expr(&mut iter),
-            Ok(TypeExpr::Fun(
-                Rc::new(TypeExpr::Int),
-                Rc::new(TypeExpr::Bool)
-            ))
+            Ok(TypeExpr::fun(TypeExpr::Int, TypeExpr::Bool))
         );
     }
 
@@ -255,12 +250,9 @@ mod tests {
 
         assert_eq!(
             parse_type_expr(&mut iter),
-            Ok(TypeExpr::Fun(
-                Rc::new(TypeExpr::Int),
-                Rc::new(TypeExpr::Fun(
-                    Rc::new(TypeExpr::Bool),
-                    Rc::new(TypeExpr::Int)
-                ))
+            Ok(TypeExpr::fun(
+                TypeExpr::Int,
+                TypeExpr::fun(TypeExpr::Bool, TypeExpr::Int)
             ))
         );
     }
@@ -272,12 +264,9 @@ mod tests {
 
         assert_eq!(
             parse_type_expr(&mut iter),
-            Ok(TypeExpr::Fun(
-                Rc::new(TypeExpr::Fun(
-                    Rc::new(TypeExpr::TypeVar("a".to_string())),
-                    Rc::new(TypeExpr::TypeVar("b".to_string()))
-                )),
-                Rc::new(TypeExpr::TypeVar("a".to_string()))
+            Ok(TypeExpr::fun(
+                TypeExpr::fun(TypeExpr::type_var("a"), TypeExpr::type_var("b"),),
+                TypeExpr::type_var("a")
             ))
         );
     }
@@ -289,18 +278,15 @@ mod tests {
 
         assert_eq!(
             parse_expr(&mut iter),
-            Ok(Expr::Lambda(
-                "x".to_string(),
-                Rc::new(Expr::Lambda(
-                    "y".to_string(),
-                    Rc::new(Expr::Ap(
-                        Rc::new(Expr::Ap(
-                            Rc::new(Expr::Ident("plus".to_string())),
-                            Rc::new(Expr::Ident("x".to_string()))
-                        )),
-                        Rc::new(Expr::Ident("y".to_string()))
-                    ))
-                ))
+            Ok(Expr::lambda(
+                "x",
+                Expr::lambda(
+                    "y",
+                    Expr::ap(
+                        Expr::ap(Expr::ident("plus"), Expr::ident("x")),
+                        Expr::ident("y")
+                    )
+                )
             ))
         );
     }
@@ -312,22 +298,13 @@ mod tests {
 
         assert_eq!(
             parse_expr(&mut iter),
-            Ok(Expr::If(
-                Rc::new(Expr::Bool(true)),
-                Rc::new(Expr::Ap(
-                    Rc::new(Expr::Ap(
-                        Rc::new(Expr::Ident("mul".to_string())),
-                        Rc::new(Expr::Ident("x".to_string()))
-                    )),
-                    Rc::new(Expr::Ident("y".to_string()))
-                )),
-                Rc::new(Expr::Ap(
-                    Rc::new(Expr::Lambda(
-                        "x".to_string(),
-                        Rc::new(Expr::Ident("x".to_string()))
-                    )),
-                    Rc::new(Expr::Ident("x".to_string()))
-                ))
+            Ok(Expr::if_(
+                Expr::bool(true),
+                Expr::ap(
+                    Expr::ap(Expr::ident("mul"), Expr::ident("x"),),
+                    Expr::ident("y"),
+                ),
+                Expr::ap(Expr::lambda("x", Expr::ident("x"),), Expr::ident("x"))
             ))
         );
     }
@@ -339,13 +316,7 @@ mod tests {
 
         assert_eq!(
             parse_stmt(&mut iter),
-            Ok(Statement::Let(
-                "f".to_string(),
-                Rc::new(Expr::Lambda(
-                    "x".to_string(),
-                    Rc::new(Expr::Ident("x".to_string()))
-                ))
-            ))
+            Ok(Statement::let_("f", Expr::lambda("x", Expr::ident("x"))))
         );
     }
 
@@ -356,16 +327,10 @@ mod tests {
 
         assert_eq!(
             parse_expr(&mut iter),
-            Ok(Expr::Let(
-                "x".to_string(),
-                Rc::new(Expr::Ap(
-                    Rc::new(Expr::Ident("f".to_string())),
-                    Rc::new(Expr::Ident("y".to_string()))
-                )),
-                Rc::new(Expr::Ap(
-                    Rc::new(Expr::Ident("x".to_string())),
-                    Rc::new(Expr::Int(5))
-                ))
+            Ok(Expr::let_(
+                "x",
+                Expr::ap(Expr::ident("f"), Expr::ident("y")),
+                Expr::ap(Expr::ident("x"), Expr::int(5))
             ))
         );
     }

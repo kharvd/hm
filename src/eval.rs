@@ -1,4 +1,4 @@
-use std::{borrow::Borrow, rc::Rc};
+use std::borrow::Borrow;
 
 use crate::{
     ast::{Expr, Statement, TypeExpr},
@@ -39,12 +39,9 @@ impl Statement {
                     value: Some(value),
                 }
             }
-            Statement::LetRec(name, expr) => Statement::Let(
-                name.clone(),
-                Rc::new(Expr::Ap(
-                    Rc::new(Expr::Ident("fix".to_string())),
-                    Rc::new(Expr::Lambda(name.clone(), expr.clone())),
-                )),
+            Statement::LetRec(name, expr) => Statement::let_(
+                name,
+                Expr::ap(Expr::ident("fix"), Expr::lambda(name, (**expr).clone())),
             )
             .eval(env)?,
             Statement::Val(name, type_expr) => {
@@ -57,18 +54,18 @@ impl Statement {
                             ));
                         }
 
-                        type_expr.clone()
+                        (**type_expr).clone()
                     }
                     _ => {
                         let free_vars = type_expr.free_variables();
-                        Rc::new(TypeExpr::Forall(free_vars, type_expr.clone()))
+                        TypeExpr::Forall(free_vars, type_expr.clone())
                     }
                 };
 
                 StatementEval {
-                    new_env: env.extend_type(&name, (*generalized_type_expr).clone()),
+                    new_env: env.extend_type(&name, generalized_type_expr.clone()),
                     var_name: name.clone(),
-                    var_type: (*generalized_type_expr).clone(),
+                    var_type: generalized_type_expr,
                     value: None,
                 }
             }
@@ -200,7 +197,7 @@ mod tests {
             eval("fun x -> x"),
             Value::Func {
                 param: "x".to_string(),
-                body: Rc::new(Expr::Ident("x".to_string())),
+                body: Rc::new(Expr::ident("x")),
                 closure: Env::new(),
             }
         );

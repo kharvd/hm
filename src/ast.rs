@@ -3,7 +3,7 @@ use std::{fmt::Display, rc::Rc};
 use itertools::Itertools;
 use rpds::HashTrieSet;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Expr {
     Int(i64),
     Bool(bool),
@@ -12,6 +12,40 @@ pub enum Expr {
     Let(String, Rc<Expr>, Rc<Expr>),
     Lambda(String, Rc<Expr>),
     Ap(Rc<Expr>, Rc<Expr>),
+}
+
+impl Expr {
+    #[cfg(test)]
+    pub fn int(n: i64) -> Self {
+        Self::Int(n)
+    }
+
+    #[cfg(test)]
+    pub fn bool(b: bool) -> Self {
+        Self::Bool(b)
+    }
+
+    pub fn ident(name: &str) -> Self {
+        Self::Ident(name.to_string())
+    }
+
+    #[cfg(test)]
+    pub fn if_(cond: Expr, then: Expr, else_: Expr) -> Self {
+        Self::If(Rc::new(cond), Rc::new(then), Rc::new(else_))
+    }
+
+    #[cfg(test)]
+    pub fn let_(name: &str, expr: Expr, body: Expr) -> Self {
+        Self::Let(name.to_string(), Rc::new(expr), Rc::new(body))
+    }
+
+    pub fn lambda(param: &str, body: Expr) -> Self {
+        Self::Lambda(param.to_string(), Rc::new(body))
+    }
+
+    pub fn ap(fun: Expr, arg: Expr) -> Self {
+        Self::Ap(Rc::new(fun), Rc::new(arg))
+    }
 }
 
 impl Display for Expr {
@@ -83,6 +117,22 @@ pub enum Statement {
     Val(String, Rc<TypeExpr>),
 }
 
+impl Statement {
+    pub fn let_(name: &str, expr: Expr) -> Self {
+        Self::Let(name.to_string(), Rc::new(expr))
+    }
+
+    #[cfg(test)]
+    pub fn let_rec(name: &str, expr: Expr) -> Self {
+        Self::LetRec(name.to_string(), Rc::new(expr))
+    }
+
+    #[cfg(test)]
+    pub fn val(name: &str, ty: TypeExpr) -> Self {
+        Self::Val(name.to_string(), Rc::new(ty))
+    }
+}
+
 impl Display for Statement {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -99,32 +149,22 @@ mod tests {
 
     #[test]
     fn display_expr() {
-        let expr = Expr::Ap(
-            Rc::new(Expr::Lambda(
-                "x".to_string(),
-                Rc::new(Expr::Ap(
-                    Rc::new(Expr::Lambda(
-                        "y".to_string(),
-                        Rc::new(Expr::Ap(
-                            Rc::new(Expr::Ident("x".to_string())),
-                            Rc::new(Expr::Ident("y".to_string())),
-                        )),
-                    )),
-                    Rc::new(Expr::Int(1)),
-                )),
-            )),
-            Rc::new(Expr::Int(2)),
+        let expr = Expr::ap(
+            Expr::lambda(
+                "x",
+                Expr::ap(
+                    Expr::lambda("y", Expr::ap(Expr::ident("x"), Expr::ident("y"))),
+                    Expr::int(1),
+                ),
+            ),
+            Expr::int(2),
         );
         assert_eq!(format!("{}", expr), "((fun x -> ((fun y -> (x y)) 1)) 2)");
     }
 
     #[test]
     fn display_expr_if() {
-        let expr = Expr::If(
-            Rc::new(Expr::Bool(true)),
-            Rc::new(Expr::Int(1)),
-            Rc::new(Expr::Int(2)),
-        );
+        let expr = Expr::if_(Expr::bool(true), Expr::int(1), Expr::int(2));
         assert_eq!(format!("{}", expr), "(if true then 1 else 2)");
     }
 
@@ -139,27 +179,18 @@ mod tests {
 
     #[test]
     fn display_let_statement() {
-        let stmt = Statement::Let(
-            "f".to_string(),
-            Rc::new(Expr::Lambda(
-                "x".to_string(),
-                Rc::new(Expr::Ap(
-                    Rc::new(Expr::Ident("f".to_string())),
-                    Rc::new(Expr::Ident("x".to_string())),
-                )),
-            )),
+        let stmt = Statement::let_(
+            "f",
+            Expr::lambda("x", Expr::ap(Expr::ident("f"), Expr::ident("x"))),
         );
         assert_eq!(format!("{}", stmt), "let f = (fun x -> (f x))");
     }
 
     #[test]
     fn display_val_statement() {
-        let stmt = Statement::Val(
-            "f".to_string(),
-            Rc::new(TypeExpr::Fun(
-                Rc::new(TypeExpr::TypeVar("a".to_string())),
-                Rc::new(TypeExpr::TypeVar("a".to_string())),
-            )),
+        let stmt = Statement::val(
+            "f",
+            TypeExpr::fun(TypeExpr::type_var("a"), TypeExpr::type_var("a")),
         );
         assert_eq!(format!("{}", stmt), "val f : ('a -> 'a)");
     }
