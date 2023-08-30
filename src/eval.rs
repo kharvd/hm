@@ -69,20 +69,21 @@ impl Statement {
                     value: None,
                 }
             }
-            Statement::Data(name, variants) => {
-                let mut new_env = env.clone();
-                for variant in variants {
-                    new_env = new_env
-                        .extend_type(&variant, TypeExpr::constructor(name, vec![]))
-                        .extend(variant, Value::Data(variant.clone(), vec![]));
-                }
+            Statement::Data(name, args, variants) => {
+                // let mut new_env = env.clone();
+                // for variant in variants {
+                //     new_env = new_env
+                //         .extend_type(&variant, TypeExpr::constructor(name, vec![]))
+                //         .extend(variant, Value::Data(variant.clone(), vec![]));
+                // }
 
-                StatementEval {
-                    new_env,
-                    var_name: name.clone(),
-                    var_type: TypeExpr::constructor(name, vec![]),
-                    value: None,
-                }
+                // StatementEval {
+                //     new_env,
+                //     var_name: name.clone(),
+                //     var_type: TypeExpr::constructor(name, vec![]),
+                //     value: None,
+                // }
+                todo!()
             }
         })
     }

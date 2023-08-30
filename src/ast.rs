@@ -147,7 +147,7 @@ pub enum Statement {
     Let(String, Rc<Expr>),
     LetRec(String, Rc<Expr>),
     Val(String, Rc<TypeExpr>),
-    Data(String, Vec<String>),
+    Data(String, Vec<String>, Vec<TypeExpr>),
 }
 
 impl Statement {
@@ -167,8 +167,14 @@ impl Display for Statement {
             Statement::Let(name, expr) => write!(f, "let {} = {}", name, expr),
             Statement::LetRec(name, expr) => write!(f, "let rec {} = {}", name, expr),
             Statement::Val(name, ty) => write!(f, "val {} : {}", name, ty),
-            Statement::Data(name, variants) => {
-                write!(f, "data {} = {}", name, variants.join(" | "))
+            Statement::Data(name, args, variants) => {
+                write!(
+                    f,
+                    "data {} {} = {}",
+                    name,
+                    args.iter().map(|arg| format!("'{}", arg)).join(" "),
+                    variants.iter().join(" | ")
+                )
             }
         }
     }

@@ -74,6 +74,13 @@ fn parse_let_statement(
     }
 }
 
+fn parse_type_var(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<String, String> {
+    match tokens.next() {
+        Some(Token::Ident(name)) => Ok(name),
+        _ => Err("Expected identifier after apostrophe".to_string()),
+    }
+}
+
 fn parse_data_statement(
     tokens: &mut Peekable<impl Iterator<Item = Token>>,
 ) -> Result<Statement, String> {
@@ -82,21 +89,34 @@ fn parse_data_statement(
         Some(Token::Ident(name)) => name,
         _ => return Err("Expected identifier after 'data'".to_string()),
     };
+
+    let mut args = Vec::new();
+    loop {
+        match tokens.peek() {
+            Some(Token::Apostrophe) => {
+                tokens.next();
+                let var_name = parse_type_var(tokens)?;
+                args.push(var_name);
+            }
+            _ => break,
+        }
+    }
+
     match tokens.next() {
         Some(Token::Equals) => (),
         _ => return Err("Expected '=' after identifier".to_string()),
     }
     let variants = parse_data_variants(tokens)?;
-    Ok(Statement::Data(name, variants))
+    Ok(Statement::Data(name, args, variants))
 }
 
 fn parse_data_variants(
     tokens: &mut Peekable<impl Iterator<Item = Token>>,
-) -> Result<Vec<String>, String> {
+) -> Result<Vec<TypeExpr>, String> {
     let mut variants = Vec::new();
     loop {
         let variant = match tokens.next() {
-            Some(Token::Ident(name)) => name,
+            Some(Token::Ident(name)) => parse_type_constructor(name, tokens)?,
             _ => return Err("Expected identifier".to_string()),
         };
         variants.push(variant);
@@ -152,17 +172,10 @@ fn parse_forall_type_expr(
     let mut vars = RedBlackTreeSet::new();
     loop {
         match tokens.next() {
-            Some(Token::Apostrophe) => match tokens.next() {
-                Some(Token::Ident(name)) => {
-                    vars = vars.insert(name);
-                }
-                t => {
-                    return Err(format!(
-                        "Expected identifier after apostrophe, but got, {:?}",
-                        t
-                    ))
-                }
-            },
+            Some(Token::Apostrophe) => {
+                let var_name = parse_type_var(tokens)?;
+                vars = vars.insert(var_name);
+            }
             Some(Token::Dot) => break,
             t => return Err(format!("Expected apostrophe or dot, but got {:?}", t)),
         }
@@ -190,10 +203,7 @@ fn parse_non_arrow_expr(
     tokens: &mut Peekable<impl Iterator<Item = Token>>,
 ) -> Result<TypeExpr, String> {
     let ty = match tokens.next() {
-        Some(Token::Apostrophe) => match tokens.next() {
-            Some(Token::Ident(name)) => TypeExpr::TypeVar(name),
-            _ => return Err("Expected identifier after apostrophe".to_string()),
-        },
+        Some(Token::Apostrophe) => TypeExpr::TypeVar(parse_type_var(tokens)?),
         Some(Token::Ident(name)) => parse_type_constructor(name, tokens)?,
         Some(Token::Keyword(Keyword::Int)) => TypeExpr::Int,
         Some(Token::Keyword(Keyword::Bool)) => TypeExpr::Bool,
@@ -217,21 +227,13 @@ fn parse_type_constructor(
     let mut args = Vec::new();
     loop {
         match tokens.peek() {
-            Some(Token::Apostrophe) => {
-                tokens.next();
-                match tokens.next() {
-                    Some(Token::Ident(name)) => args.push(Rc::new(TypeExpr::TypeVar(name))),
-                    _ => return Err("Expected identifier after apostrophe".to_string()),
-                }
-            }
-            Some(Token::LParen) => {
-                tokens.next();
-                let arg = Rc::new(parse_arrow_type_expr(tokens)?);
+            Some(Token::Apostrophe)
+            | Some(Token::LParen)
+            | Some(Token::Ident(_))
+            | Some(Token::Keyword(Keyword::Bool))
+            | Some(Token::Keyword(Keyword::Int)) => {
+                let arg = Rc::new(parse_non_arrow_expr(tokens)?);
                 args.push(arg);
-                match tokens.next() {
-                    Some(Token::RParen) => (),
-                    _ => return Err("Expected closing parenthesis".to_string()),
-                }
             }
             _ => break,
         }
@@ -499,7 +501,7 @@ mod tests {
     }
 
     #[test]
-    fn test_data() {
+    fn test_data_simple() {
         let tokens = lexer::tokenize("data MyType = A | BB | Ccc").unwrap();
         let mut iter = tokens.into_iter().peekable();
 
@@ -507,7 +509,31 @@ mod tests {
             parse_stmt(&mut iter),
             Ok(Statement::Data(
                 "MyType".to_string(),
-                vec!["A".to_string(), "BB".to_string(), "Ccc".to_string()]
+                vec![],
+                vec![
+                    TypeExpr::constructor("A", vec![]),
+                    TypeExpr::constructor("BB", vec![]),
+                    TypeExpr::constructor("Ccc", vec![]),
+                ]
+            ))
+        );
+    }
+
+    #[test]
+    fn test_data_with_args() {
+        let tokens = lexer::tokenize("data MyType 'a 'b = A | BB 'a bool | Ccc 'b").unwrap();
+        let mut iter = tokens.into_iter().peekable();
+
+        assert_eq!(
+            parse_stmt(&mut iter),
+            Ok(Statement::Data(
+                "MyType".to_string(),
+                vec!["a".to_string(), "b".to_string()],
+                vec![
+                    TypeExpr::constructor("A", vec![]),
+                    TypeExpr::constructor("BB", vec![TypeExpr::type_var("a"), TypeExpr::Bool]),
+                    TypeExpr::constructor("Ccc", vec![TypeExpr::type_var("b")]),
+                ]
             ))
         );
     }
