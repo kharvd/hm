@@ -5,6 +5,7 @@ pub enum Keyword {
     Fun,
     Let,
     Rec,
+    Data,
     In,
     Val,
     Forall,
@@ -29,6 +30,7 @@ pub enum Token {
     Apostrophe,
     Equals,
     Dot,
+    Pipe,
 }
 
 pub fn tokenize(input: &str) -> Result<Vec<Token>, String> {
@@ -40,13 +42,14 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, String> {
             'a'..='z' | 'A'..='Z' => {
                 let ident: String = chars
                     .by_ref()
-                    .peeking_take_while(|&ch| ch.is_ascii_alphabetic())
+                    .peeking_take_while(|&ch| ch.is_ascii_alphanumeric())
                     .collect();
 
                 match ident.as_str() {
                     "fun" => tokens.push(Token::Keyword(Keyword::Fun)),
                     "let" => tokens.push(Token::Keyword(Keyword::Let)),
                     "rec" => tokens.push(Token::Keyword(Keyword::Rec)),
+                    "data" => tokens.push(Token::Keyword(Keyword::Data)),
                     "in" => tokens.push(Token::Keyword(Keyword::In)),
                     "val" => tokens.push(Token::Keyword(Keyword::Val)),
                     "forall" => tokens.push(Token::Keyword(Keyword::Forall)),
@@ -102,6 +105,10 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, String> {
             }
             '.' => {
                 tokens.push(Token::Dot);
+                chars.next();
+            }
+            '|' => {
+                tokens.push(Token::Pipe);
                 chars.next();
             }
             ' ' | '\t' | '\n' | '\r' => {

@@ -239,6 +239,7 @@ impl TypeExpr {
         match self {
             TypeExpr::Int => true,
             TypeExpr::Bool => true,
+            TypeExpr::Ident(_) => true,
             TypeExpr::Fun(t1, t2) => t1.is_free(name) && t2.is_free(name),
             TypeExpr::TypeVar(other_name) => name != other_name,
             TypeExpr::Forall(vars, ty) => {
@@ -253,8 +254,7 @@ impl TypeExpr {
 
     fn substitute(&self, sub: &Substitution) -> Self {
         match self {
-            TypeExpr::Int => self.clone(),
-            TypeExpr::Bool => self.clone(),
+            TypeExpr::Int | TypeExpr::Bool | TypeExpr::Ident(_) => self.clone(),
             TypeExpr::Fun(t1, t2) => TypeExpr::fun(t1.substitute(sub), t2.substitute(sub)),
             TypeExpr::TypeVar(name) => {
                 if name == &sub.0 {
@@ -275,8 +275,7 @@ impl TypeExpr {
 
     pub fn free_variables(&self) -> RedBlackTreeSet<String> {
         match self {
-            TypeExpr::Int => RedBlackTreeSet::new(),
-            TypeExpr::Bool => RedBlackTreeSet::new(),
+            TypeExpr::Int | TypeExpr::Bool | TypeExpr::Ident(_) => RedBlackTreeSet::new(),
             TypeExpr::Fun(t1, t2) => {
                 let vars1 = t1.free_variables();
                 let vars2 = t2.free_variables();
@@ -366,6 +365,7 @@ impl Reduction {
 fn reduce(constraint: Constraint) -> Result<Reduction, String> {
     match (constraint.lhs, constraint.rhs) {
         (TypeExpr::Int, TypeExpr::Int) | (TypeExpr::Bool, TypeExpr::Bool) => Ok(Reduction::empty()),
+        (TypeExpr::Ident(x), TypeExpr::Ident(y)) if x == y => Ok(Reduction::empty()),
         (TypeExpr::TypeVar(x), TypeExpr::TypeVar(y)) => {
             if x == y {
                 Ok(Reduction::empty())
@@ -377,20 +377,8 @@ fn reduce(constraint: Constraint) -> Result<Reduction, String> {
             Constraint::new((*t1).clone(), (*t3).clone()),
             Constraint::new((*t2).clone(), (*t4).clone()),
         ])),
-        (TypeExpr::TypeVar(x), rhs) => {
-            if rhs.is_free(&x) {
-                Ok(Reduction::substitution((x, rhs)))
-            } else {
-                Err(format!("Failed to unify constraint '{} = {}", x, rhs))
-            }
-        }
-        (lhs, TypeExpr::TypeVar(x)) => {
-            if lhs.is_free(&x) {
-                Ok(Reduction::substitution((x, lhs)))
-            } else {
-                Err(format!("Failed to unify constraint {} = '{}", lhs, x))
-            }
-        }
+        (TypeExpr::TypeVar(x), rhs) if rhs.is_free(&x) => Ok(Reduction::substitution((x, rhs))),
+        (lhs, TypeExpr::TypeVar(x)) if lhs.is_free(&x) => Ok(Reduction::substitution((x, lhs))),
         (lhs, rhs) => Err(format!("Failed to unify constraint {} = {}", lhs, rhs)),
     }
 }
@@ -515,5 +503,33 @@ mod tests {
             infer_type(&env, "(let g = fun x -> fun y -> fun z -> y in g 1)").unwrap(),
             parse_type_expr("forall 'a 'b. 'a -> 'b -> 'a")
         );
+    }
+
+    #[test]
+    fn test_data() {
+        let mut env = Env::prelude();
+        env = env
+            .eval_statement(&parse_statement("data Sign = Negative | Zero | Positive").unwrap())
+            .unwrap()
+            .new_env;
+
+        assert_eq!(
+            infer_type(&env, "Negative").unwrap(),
+            parse_type_expr("Sign")
+        );
+        assert_eq!(infer_type(&env, "Zero").unwrap(), parse_type_expr("Sign"));
+        assert_eq!(
+            infer_type(&env, "Positive").unwrap(),
+            parse_type_expr("Sign")
+        );
+
+        assert_eq!(
+            infer_type(
+                &env,
+                "fun x -> if lt x 0 then Negative else if gt x 0 then Positive else Zero"
+            )
+            .unwrap(),
+            parse_type_expr("int -> Sign")
+        )
     }
 }

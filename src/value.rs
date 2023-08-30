@@ -25,6 +25,7 @@ pub enum Value {
     },
     Fix,
     BuiltinFunc(Rc<dyn BuiltinFunc>),
+    Data(String, Vec<Value>),
 }
 
 impl PartialEq for Value {
@@ -58,6 +59,9 @@ impl PartialEq for Value {
             ) => l_name == r_name && l_body == r_body && l_closure == r_closure,
             (Self::BuiltinFunc(_), Self::BuiltinFunc(_)) => false,
             (Self::Fix, Self::Fix) => true,
+            (Self::Data(l_name, l_args), Self::Data(r_name, r_args)) => {
+                l_name == r_name && l_args == r_args
+            }
             _ => false,
         }
     }
@@ -90,6 +94,7 @@ impl Debug for Value {
                 .field("closure", closure)
                 .finish(),
             Self::Fix => f.write_str("Fix"),
+            Self::Data(name, args) => f.debug_tuple("Data").field(name).field(args).finish(),
         }
     }
 }
@@ -103,6 +108,21 @@ impl Display for Value {
             Value::RecFunc { name, body, .. } => write!(f, "(let rec {} = {})", name, body),
             Value::BuiltinFunc(_) => write!(f, "<builtin>"),
             Value::Fix => write!(f, "fix"),
+            Value::Data(name, args) => {
+                if args.is_empty() {
+                    write!(f, "{}", name)
+                } else {
+                    write!(
+                        f,
+                        "({} {})",
+                        name,
+                        args.iter()
+                            .map(|x| x.to_string())
+                            .collect::<Vec<_>>()
+                            .join(" ")
+                    )
+                }
+            }
         }
     }
 }

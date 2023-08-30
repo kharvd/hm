@@ -69,6 +69,21 @@ impl Statement {
                     value: None,
                 }
             }
+            Statement::Data(name, variants) => {
+                let mut new_env = env.clone();
+                for variant in variants {
+                    new_env = new_env
+                        .extend_type(&variant, TypeExpr::ident(name))
+                        .extend(variant, Value::Data(variant.clone(), vec![]));
+                }
+
+                StatementEval {
+                    new_env,
+                    var_name: name.clone(),
+                    var_type: TypeExpr::ident(name),
+                    value: None,
+                }
+            }
         })
     }
 }
@@ -146,6 +161,12 @@ impl Expr {
                         );
                         let ap_expr = Expr::Ap(body, arg.clone());
                         ap_expr.eval(&body_env)
+                    }
+                    Value::Data(name, args) => {
+                        let arg_eval = arg.eval(env)?;
+                        let mut new_args = args;
+                        new_args.push(arg_eval);
+                        Ok(Value::Data(name, new_args))
                     }
                     _ => Err(format!("Expected function, got {}", func_eval)),
                 }
@@ -237,5 +258,29 @@ mod tests {
             vec!["let x = 1", "let y = let x = plus x 1 in x"],
         );
         assert_eq!(eval_env(env.clone(), "y"), Value::Int(2));
+    }
+
+    #[test]
+    fn eval_data() {
+        let env = eval_statements(
+            Env::prelude(),
+            vec![
+                "data Sign = Negative | Zero | Positive",
+                "let f = fun x -> if lt x 0 then Negative else if gt x 0 then Positive else Zero",
+            ],
+        );
+
+        assert_eq!(
+            eval_env(env.clone(), "f 5"),
+            Value::Data("Positive".to_string(), vec![])
+        );
+        assert_eq!(
+            eval_env(env.clone(), "f 0"),
+            Value::Data("Zero".to_string(), vec![])
+        );
+        assert_eq!(
+            eval_env(env.clone(), "f (neg 5)"),
+            Value::Data("Negative".to_string(), vec![])
+        );
     }
 }

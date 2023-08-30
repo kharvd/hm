@@ -71,6 +71,7 @@ pub enum TypeExpr {
     Fun(Rc<TypeExpr>, Rc<TypeExpr>),
     TypeVar(String),
     Forall(RedBlackTreeSet<String>, Rc<TypeExpr>),
+    Ident(String),
 }
 
 impl TypeExpr {
@@ -81,6 +82,10 @@ impl TypeExpr {
 
     pub fn type_var(name: &str) -> Self {
         Self::TypeVar(name.to_string())
+    }
+
+    pub fn ident(name: &str) -> Self {
+        Self::Ident(name.to_string())
     }
 
     pub fn forall(vars: RedBlackTreeSet<String>, ty: TypeExpr) -> Self {
@@ -115,6 +120,7 @@ impl Display for TypeExpr {
                     )
                 }
             }
+            TypeExpr::Ident(name) => write!(f, "{}", name),
         }
     }
 }
@@ -124,6 +130,7 @@ pub enum Statement {
     Let(String, Rc<Expr>),
     LetRec(String, Rc<Expr>),
     Val(String, Rc<TypeExpr>),
+    Data(String, Vec<String>),
 }
 
 impl Statement {
@@ -143,6 +150,9 @@ impl Display for Statement {
             Statement::Let(name, expr) => write!(f, "let {} = {}", name, expr),
             Statement::LetRec(name, expr) => write!(f, "let rec {} = {}", name, expr),
             Statement::Val(name, ty) => write!(f, "val {} : {}", name, ty),
+            Statement::Data(name, variants) => {
+                write!(f, "data {} = {}", name, variants.join(" | "))
+            }
         }
     }
 }

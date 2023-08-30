@@ -17,9 +17,9 @@ pub fn parse(s: &str) -> Result<ParseResult, String> {
     let mut iter = tokens.into_iter().peekable();
     match iter.peek() {
         Some(token) => Ok(match token {
-            Token::Keyword(Keyword::Let) | Token::Keyword(Keyword::Val) => {
-                ParseResult::Statement(parse_stmt(&mut iter)?)
-            }
+            Token::Keyword(Keyword::Let)
+            | Token::Keyword(Keyword::Val)
+            | Token::Keyword(Keyword::Data) => ParseResult::Statement(parse_stmt(&mut iter)?),
             _ => ParseResult::Expression(parse_expr(&mut iter)?),
         }),
         None => Err("Empty input".to_string()),
@@ -36,6 +36,7 @@ pub fn parse_stmt(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<
     let statement = match tokens.peek() {
         Some(Token::Keyword(Keyword::Let)) => parse_let_statement(tokens)?,
         Some(Token::Keyword(Keyword::Val)) => parse_val_statement(tokens)?,
+        Some(Token::Keyword(Keyword::Data)) => parse_data_statement(tokens)?,
         _ => return Err("Expected statement".to_string()),
     };
 
@@ -71,6 +72,42 @@ fn parse_let_statement(
         }
         _ => return Err("Expected identifier or 'rec' after 'let'".to_string()),
     }
+}
+
+fn parse_data_statement(
+    tokens: &mut Peekable<impl Iterator<Item = Token>>,
+) -> Result<Statement, String> {
+    tokens.next();
+    let name = match tokens.next() {
+        Some(Token::Ident(name)) => name,
+        _ => return Err("Expected identifier after 'data'".to_string()),
+    };
+    match tokens.next() {
+        Some(Token::Equals) => (),
+        _ => return Err("Expected '=' after identifier".to_string()),
+    }
+    let variants = parse_data_variants(tokens)?;
+    Ok(Statement::Data(name, variants))
+}
+
+fn parse_data_variants(
+    tokens: &mut Peekable<impl Iterator<Item = Token>>,
+) -> Result<Vec<String>, String> {
+    let mut variants = Vec::new();
+    loop {
+        let variant = match tokens.next() {
+            Some(Token::Ident(name)) => name,
+            _ => return Err("Expected identifier".to_string()),
+        };
+        variants.push(variant);
+        match tokens.peek() {
+            Some(Token::Pipe) => {
+                tokens.next();
+            }
+            _ => break,
+        }
+    }
+    Ok(variants)
 }
 
 fn parse_let_rec_statement(
@@ -157,7 +194,7 @@ fn parse_non_arrow_expr(
             Some(Token::Ident(name)) => TypeExpr::TypeVar(name),
             _ => return Err("Expected identifier after apostrophe".to_string()),
         },
-        Some(Token::Ident(name)) => TypeExpr::TypeVar(name),
+        Some(Token::Ident(name)) => TypeExpr::Ident(name),
         Some(Token::Keyword(Keyword::Int)) => TypeExpr::Int,
         Some(Token::Keyword(Keyword::Bool)) => TypeExpr::Bool,
         Some(Token::LParen) => {
@@ -278,8 +315,22 @@ mod tests {
         let mut iter = tokens.into_iter().peekable();
 
         assert_eq!(
-            parse_arrow_type_expr(&mut iter),
+            parse_type_expr(&mut iter),
             Ok(TypeExpr::fun(TypeExpr::Int, TypeExpr::Bool))
+        );
+    }
+
+    #[test]
+    fn test_type_ident() {
+        let tokens = lexer::tokenize("MyType -> bool").unwrap();
+        let mut iter = tokens.into_iter().peekable();
+
+        assert_eq!(
+            parse_type_expr(&mut iter),
+            Ok(TypeExpr::fun(
+                TypeExpr::Ident("MyType".to_string()),
+                TypeExpr::Bool
+            ))
         );
     }
 
@@ -387,6 +438,20 @@ mod tests {
                     .insert("a".to_string())
                     .insert("b".to_string()),
                 TypeExpr::fun(TypeExpr::type_var("a"), TypeExpr::type_var("b"))
+            ))
+        );
+    }
+
+    #[test]
+    fn test_data() {
+        let tokens = lexer::tokenize("data MyType = A | BB | Ccc").unwrap();
+        let mut iter = tokens.into_iter().peekable();
+
+        assert_eq!(
+            parse_stmt(&mut iter),
+            Ok(Statement::Data(
+                "MyType".to_string(),
+                vec!["A".to_string(), "BB".to_string(), "Ccc".to_string()]
             ))
         );
     }
