@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{borrow::Borrow, rc::Rc};
 
 use crate::{
     ast::{Expr, Statement, TypeExpr},
@@ -47,12 +47,31 @@ impl Statement {
                 )),
             )
             .eval(env)?,
-            Statement::Val(name, type_expr) => StatementEval {
-                new_env: env.extend_type(&name, type_expr.clone()),
-                var_name: name.clone(),
-                var_type: type_expr.clone(),
-                value: None,
-            },
+            Statement::Val(name, type_expr) => {
+                let generalized_type_expr = match type_expr.borrow() {
+                    TypeExpr::Forall(vars, expr) => {
+                        if expr.free_variables() != *vars {
+                            return Err(format!(
+                                "Type variables in forall do not match free variables: {}",
+                                type_expr
+                            ));
+                        }
+
+                        type_expr.clone()
+                    }
+                    _ => {
+                        let free_vars = type_expr.free_variables();
+                        Rc::new(TypeExpr::Forall(free_vars, type_expr.clone()))
+                    }
+                };
+
+                StatementEval {
+                    new_env: env.extend_type(&name, generalized_type_expr.clone()),
+                    var_name: name.clone(),
+                    var_type: generalized_type_expr.clone(),
+                    value: None,
+                }
+            }
         })
     }
 }

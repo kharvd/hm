@@ -1,18 +1,31 @@
-use std::{fmt::Debug, rc::Rc};
+use std::{
+    fmt::{Debug, Display},
+    rc::Rc,
+};
 
-use rpds::HashTrieMap;
+use rpds::{HashTrieMap, HashTrieSet};
 
 use crate::{ast::TypeExpr, value::Value};
 
 #[derive(Clone, PartialEq)]
 pub struct Env {
-    vars: HashTrieMap<String, Value>,
-    typings: HashTrieMap<String, Rc<TypeExpr>>,
+    pub vars: HashTrieMap<String, Value>,
+    pub typings: HashTrieMap<String, Rc<TypeExpr>>,
 }
 
 impl Debug for Env {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Env").finish()
+    }
+}
+
+impl Display for Env {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut vars = self.vars.iter().collect::<Vec<_>>();
+        vars.sort_by_key(|(k, _)| k.clone());
+        let mut typings = self.typings.iter().collect::<Vec<_>>();
+        typings.sort_by_key(|(k, _)| k.clone());
+        write!(f, "Env {{ vars: {:?}, typings: {:?} }}", vars, typings)
     }
 }
 
@@ -50,5 +63,15 @@ impl Env {
             Some(value) => Ok(value.clone()),
             None => Err(format!("Unknown identifier {}", name)),
         }
+    }
+
+    pub fn free_type_vars(&self) -> HashTrieSet<String> {
+        let mut free_vars = HashTrieSet::new();
+        for (_, ty) in self.typings.iter() {
+            for var in ty.free_variables().iter() {
+                free_vars.insert_mut(var.clone());
+            }
+        }
+        free_vars
     }
 }

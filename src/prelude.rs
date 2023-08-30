@@ -39,7 +39,6 @@ impl Env {
             val xor : bool -> bool -> bool
 
             val fix : ('a -> 'a) -> 'a
-
             let eq = fun x -> fun y -> and (leq x y) (geq x y)
 
             let rec fact = fun n -> if eq n 0 then 1 else mult n (fact (minus n 1))

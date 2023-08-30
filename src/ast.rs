@@ -1,5 +1,8 @@
 use std::{fmt::Display, rc::Rc};
 
+use itertools::Itertools;
+use rpds::HashTrieSet;
+
 #[derive(Debug, PartialEq)]
 pub enum Expr {
     Int(i64),
@@ -33,6 +36,7 @@ pub enum TypeExpr {
     Bool,
     Fun(Rc<TypeExpr>, Rc<TypeExpr>),
     TypeVar(String),
+    Forall(HashTrieSet<String>, Rc<TypeExpr>),
 }
 
 impl Display for TypeExpr {
@@ -42,6 +46,18 @@ impl Display for TypeExpr {
             TypeExpr::Bool => write!(f, "bool"),
             TypeExpr::Fun(param, body) => write!(f, "({} -> {})", param, body),
             TypeExpr::TypeVar(s) => write!(f, "'{}", s),
+            TypeExpr::Forall(vars, ty) => {
+                if vars.is_empty() {
+                    write!(f, "{}", ty)
+                } else {
+                    write!(
+                        f,
+                        "forall {} . {}",
+                        vars.into_iter().map(|v| format!("'{}", v)).join(" "),
+                        ty
+                    )
+                }
+            }
         }
     }
 }
@@ -135,5 +151,35 @@ mod tests {
             )),
         );
         assert_eq!(format!("{}", stmt), "val f : ('a -> 'a)");
+    }
+
+    #[test]
+    fn free_variables() {
+        let ty = TypeExpr::Fun(
+            Rc::new(TypeExpr::Fun(
+                Rc::new(TypeExpr::Int),
+                Rc::new(TypeExpr::TypeVar("a".to_string())),
+            )),
+            Rc::new(TypeExpr::TypeVar("b".to_string())),
+        );
+        assert_eq!(
+            ty.free_variables(),
+            HashTrieSet::new()
+                .insert("a".to_string())
+                .insert("b".to_string())
+        );
+
+        let ty = TypeExpr::Forall(
+            HashTrieSet::new().insert("a".to_string()),
+            Rc::new(TypeExpr::Fun(
+                Rc::new(TypeExpr::TypeVar("a".to_string())),
+                Rc::new(TypeExpr::TypeVar("b".to_string())),
+            )),
+        );
+
+        assert_eq!(
+            ty.free_variables(),
+            HashTrieSet::new().insert("b".to_string())
+        );
     }
 }
