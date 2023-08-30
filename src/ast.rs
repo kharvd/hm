@@ -6,6 +6,7 @@ pub enum Expr {
     Bool(bool),
     Ident(String),
     If(Rc<Expr>, Rc<Expr>, Rc<Expr>),
+    Let(String, Rc<Expr>, Rc<Expr>),
     Lambda(String, Rc<Expr>),
     Ap(Rc<Expr>, Rc<Expr>),
 }
@@ -21,6 +22,7 @@ impl Display for Expr {
             }
             Expr::Lambda(param, body) => write!(f, "(fun {} -> {})", param, body),
             Expr::Ap(fun, arg) => write!(f, "({} {})", fun, arg),
+            Expr::Let(name, expr, body) => write!(f, "(let {} = {} in {})", name, expr, body),
         }
     }
 }

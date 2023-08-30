@@ -5,6 +5,7 @@ pub enum Keyword {
     Fun,
     Let,
     Rec,
+    In,
     Val,
     If,
     Then,
@@ -44,6 +45,7 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, String> {
                     "fun" => tokens.push(Token::Keyword(Keyword::Fun)),
                     "let" => tokens.push(Token::Keyword(Keyword::Let)),
                     "rec" => tokens.push(Token::Keyword(Keyword::Rec)),
+                    "in" => tokens.push(Token::Keyword(Keyword::In)),
                     "val" => tokens.push(Token::Keyword(Keyword::Val)),
                     "if" => tokens.push(Token::Keyword(Keyword::If)),
                     "then" => tokens.push(Token::Keyword(Keyword::Then)),
@@ -181,6 +183,22 @@ mod tests {
                 Token::Ident("neg".to_string()),
                 Token::Int(1),
                 Token::RParen,
+            ])
+        );
+
+        assert_eq!(
+            tokenize("let f = fun x -> x in f 5"),
+            Ok(vec![
+                Token::Keyword(Keyword::Let),
+                Token::Ident("f".to_string()),
+                Token::Equals,
+                Token::Keyword(Keyword::Fun),
+                Token::Ident("x".to_string()),
+                Token::Arrow,
+                Token::Ident("x".to_string()),
+                Token::Keyword(Keyword::In),
+                Token::Ident("f".to_string()),
+                Token::Int(5),
             ])
         );
     }

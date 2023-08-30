@@ -136,6 +136,23 @@ fn infer_constraints_inner(
                 constraints: new_constraints,
             }
         }
+        Expr::Let(name, bound_expr, expr) => {
+            let mut infer_bound = infer_constraints_inner(env, bound_expr, type_var_counter)?;
+            let mut infer_expr = infer_constraints_inner(
+                &env.extend_type(name, infer_bound.inferred_type.clone()),
+                expr,
+                type_var_counter,
+            )?;
+
+            let mut new_constraints = Vec::new();
+            new_constraints.append(&mut infer_bound.constraints);
+            new_constraints.append(&mut infer_expr.constraints);
+
+            Inference {
+                inferred_type: infer_expr.inferred_type,
+                constraints: new_constraints,
+            }
+        }
     })
 }
 

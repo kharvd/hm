@@ -184,6 +184,10 @@ fn parse_non_ap_expr(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Resu
             let body = Rc::new(parse_expr(tokens)?);
             Expr::Lambda(param, body)
         }
+        Some(Token::Keyword(Keyword::Let)) => {
+            let (name, bound_expr, expr) = parse_let_expr(tokens)?;
+            Expr::Let(name, Rc::new(bound_expr), Rc::new(expr))
+        }
         Some(Token::LParen) => {
             let expr = parse_expr(tokens)?;
             match tokens.next() {
@@ -195,6 +199,31 @@ fn parse_non_ap_expr(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Resu
     };
 
     Ok(expr)
+}
+
+fn parse_let_expr(
+    tokens: &mut Peekable<impl Iterator<Item = Token>>,
+) -> Result<(String, Expr, Expr), String> {
+    let name = match tokens.next() {
+        Some(Token::Ident(name)) => name,
+        _ => return Err("Expected identifier after 'let'".to_string()),
+    };
+
+    match tokens.next() {
+        Some(Token::Equals) => (),
+        _ => return Err("Expected '=' after identifier".to_string()),
+    }
+
+    let bound_expr = parse_expr(tokens)?;
+
+    match tokens.next() {
+        Some(Token::Keyword(Keyword::In)) => (),
+        _ => return Err("Expected 'in' after bound expression".to_string()),
+    }
+
+    let expr = parse_expr(tokens)?;
+
+    Ok((name, bound_expr, expr))
 }
 
 #[cfg(test)]
@@ -315,6 +344,27 @@ mod tests {
                 Rc::new(Expr::Lambda(
                     "x".to_string(),
                     Rc::new(Expr::Ident("x".to_string()))
+                ))
+            ))
+        );
+    }
+
+    #[test]
+    fn test_let_expression() {
+        let tokens = lexer::tokenize("let x = f y in x 5").unwrap();
+        let mut iter = tokens.into_iter().peekable();
+
+        assert_eq!(
+            parse_expr(&mut iter),
+            Ok(Expr::Let(
+                "x".to_string(),
+                Rc::new(Expr::Ap(
+                    Rc::new(Expr::Ident("f".to_string())),
+                    Rc::new(Expr::Ident("y".to_string()))
+                )),
+                Rc::new(Expr::Ap(
+                    Rc::new(Expr::Ident("x".to_string())),
+                    Rc::new(Expr::Int(5))
                 ))
             ))
         );

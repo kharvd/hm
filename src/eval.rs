@@ -79,6 +79,11 @@ impl Expr {
                 body: body.clone(),
                 closure: env.clone(),
             }),
+            Expr::Let(name, bound_expr, expr) => {
+                let bound_value = bound_expr.eval(env)?;
+                let inner_env = env.extend(&name, bound_value);
+                expr.eval(&inner_env)
+            }
             Expr::Ap(func, arg) => {
                 let func_eval = func.eval(env)?;
                 match func_eval {
@@ -207,5 +212,14 @@ mod tests {
 
         assert_eq!(eval_env(env.clone(), "fact 5"), Value::Int(120));
         assert_eq!(eval_env(env.clone(), "fib 8"), Value::Int(34));
+    }
+
+    #[test]
+    fn eval_let_expr() {
+        let env = eval_statements(
+            Env::prelude(),
+            vec!["let x = 1", "let y = let x = plus x 1 in x"],
+        );
+        assert_eq!(eval_env(env.clone(), "y"), Value::Int(2));
     }
 }
