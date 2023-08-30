@@ -75,6 +75,7 @@ pub enum TypeExpr {
 
 impl TypeExpr {
     pub fn fun(param: TypeExpr, body: TypeExpr) -> Self {
+        assert!(!param.is_scheme() && !body.is_scheme());
         Self::Fun(Rc::new(param), Rc::new(body))
     }
 
@@ -83,7 +84,15 @@ impl TypeExpr {
     }
 
     pub fn forall(vars: HashTrieSet<String>, ty: TypeExpr) -> Self {
+        assert!(!ty.is_scheme());
         Self::Forall(vars, Rc::new(ty))
+    }
+
+    pub fn is_scheme(&self) -> bool {
+        match self {
+            TypeExpr::Forall(_, _) => true,
+            _ => false,
+        }
     }
 }
 

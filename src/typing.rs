@@ -1,4 +1,4 @@
-use std::{borrow::Borrow, fmt::Display};
+use std::fmt::Display;
 
 use rpds::HashTrieSet;
 
@@ -42,7 +42,6 @@ impl Display for Inference {
 
 pub fn infer(env: &Env, expr: &Expr) -> Result<TypeExpr, String> {
     let inference = infer_constraints(env, expr)?;
-    // print!("{} {}\n", expr, inference);
     let (inferred, _) = unify(inference)?;
     let (generalized, _) = generalize(
         env,
@@ -51,12 +50,13 @@ pub fn infer(env: &Env, expr: &Expr) -> Result<TypeExpr, String> {
             constraints: Vec::new(),
         },
     )?;
-    Ok(generalized)
+
+    assert!(generalized.is_scheme());
+    Ok(generalized.normalize())
 }
 
 fn infer_constraints(env: &Env, expr: &Expr) -> Result<Inference, String> {
-    let mut type_var_counter = 0;
-    infer_constraints_inner(env, expr, &mut type_var_counter)
+    infer_constraints_inner(env, expr, &mut 0)
 }
 
 fn allocate_type_var(counter: &mut u64) -> TypeExpr {
@@ -82,7 +82,7 @@ fn infer_constraints_inner(
         Expr::Ident(name) => {
             let type_var = allocate_type_var(type_var_counter);
             let ident_type = env.resolve_type(name)?;
-            let instantiated_type = instantiate(ident_type, type_var_counter)?;
+            let instantiated_type = instantiate(&ident_type, type_var_counter);
             Inference {
                 inferred_type: type_var.clone(),
                 constraints: vec![Constraint {
@@ -129,7 +129,6 @@ fn infer_constraints_inner(
         Expr::Ap(func, arg) => {
             let type_var = allocate_type_var(type_var_counter);
             let mut infer_func = infer_constraints_inner(env, func, type_var_counter)?;
-            // println!("infer_func {}", infer_func);
             let mut infer_arg = infer_constraints_inner(env, arg, type_var_counter)?;
 
             let mut new_constraints = Vec::new();
@@ -185,16 +184,16 @@ fn generalize(env: &Env, infer_bound: Inference) -> Result<(TypeExpr, Env), Stri
     Ok((generalized_type, new_env))
 }
 
-fn instantiate(type_expr: TypeExpr, type_var_counter: &mut u64) -> Result<TypeExpr, String> {
+fn instantiate(type_expr: &TypeExpr, type_var_counter: &mut u64) -> TypeExpr {
     match type_expr {
         TypeExpr::Forall(vars, ty) => {
             let mut substitutions = Vec::new();
             for var in vars.iter() {
                 substitutions.push((var.clone(), allocate_type_var(type_var_counter)));
             }
-            Ok(substitute(&ty, &substitutions))
+            substitute(&ty, &substitutions)
         }
-        _ => Ok(type_expr.clone()),
+        _ => type_expr.clone(),
     }
 }
 
@@ -232,32 +231,48 @@ fn unify(inference: Inference) -> Result<(TypeExpr, Vec<Substitution>), String> 
 fn substitute(t: &TypeExpr, substitutions: &Vec<Substitution>) -> TypeExpr {
     substitutions
         .into_iter()
-        .fold(t.clone(), |acc, sub| substitute_one(&acc, sub))
-}
-
-fn substitute_one(t: &TypeExpr, sub: &Substitution) -> TypeExpr {
-    match t.borrow() {
-        TypeExpr::Int => t.clone(),
-        TypeExpr::Bool => t.clone(),
-        TypeExpr::Fun(t1, t2) => TypeExpr::fun(substitute_one(t1, sub), substitute_one(t2, sub)),
-        TypeExpr::TypeVar(name) => {
-            if name == &sub.0 {
-                sub.1.clone()
-            } else {
-                t.clone()
-            }
-        }
-        TypeExpr::Forall(vars, ty) => {
-            if vars.contains(&sub.0) {
-                t.clone()
-            } else {
-                TypeExpr::forall(vars.clone(), substitute_one(ty, sub))
-            }
-        }
-    }
+        .fold(t.clone(), |acc, sub| acc.substitute(sub))
 }
 
 impl TypeExpr {
+    fn is_free(&self, name: &str) -> bool {
+        match self {
+            TypeExpr::Int => true,
+            TypeExpr::Bool => true,
+            TypeExpr::Fun(t1, t2) => t1.is_free(name) && t2.is_free(name),
+            TypeExpr::TypeVar(other_name) => name != other_name,
+            TypeExpr::Forall(vars, ty) => {
+                if vars.contains(name) {
+                    true
+                } else {
+                    ty.is_free(name)
+                }
+            }
+        }
+    }
+
+    fn substitute(&self, sub: &Substitution) -> Self {
+        match self {
+            TypeExpr::Int => self.clone(),
+            TypeExpr::Bool => self.clone(),
+            TypeExpr::Fun(t1, t2) => TypeExpr::fun(t1.substitute(sub), t2.substitute(sub)),
+            TypeExpr::TypeVar(name) => {
+                if name == &sub.0 {
+                    sub.1.clone()
+                } else {
+                    self.clone()
+                }
+            }
+            TypeExpr::Forall(vars, ty) => {
+                if vars.contains(&sub.0) {
+                    self.clone()
+                } else {
+                    TypeExpr::forall(vars.clone(), ty.substitute(sub))
+                }
+            }
+        }
+    }
+
     pub fn free_variables(&self) -> HashTrieSet<String> {
         match self {
             TypeExpr::Int => HashTrieSet::new(),
@@ -279,6 +294,31 @@ impl TypeExpr {
                 }
                 free_vars
             }
+        }
+    }
+
+    pub fn normalize(self) -> Self {
+        match self {
+            TypeExpr::Forall(vars, ty) => {
+                let mut counter = 0;
+                let mut substitutions = Vec::new();
+                let mut new_vars = HashTrieSet::new();
+
+                for var in vars.iter() {
+                    let new_name = if counter < 26 {
+                        format!("{}", ('a' as u8 + counter as u8) as char)
+                    } else {
+                        format!("t{}", counter - 26)
+                    };
+                    let type_var = TypeExpr::type_var(new_name.as_str());
+                    counter += 1;
+                    substitutions.push((var.clone(), type_var));
+                    new_vars = new_vars.insert(new_name);
+                }
+
+                TypeExpr::forall(new_vars, substitute(&ty, &substitutions))
+            }
+            s => s,
         }
     }
 }
@@ -319,22 +359,6 @@ impl Reduction {
     }
 }
 
-fn is_free(name: &String, type_expr: &TypeExpr) -> bool {
-    match type_expr.borrow() {
-        TypeExpr::Int => true,
-        TypeExpr::Bool => true,
-        TypeExpr::Fun(t1, t2) => is_free(name, t1) && is_free(name, t2),
-        TypeExpr::TypeVar(other_name) => name != other_name,
-        TypeExpr::Forall(vars, ty) => {
-            if vars.contains(name) {
-                true
-            } else {
-                is_free(name, ty)
-            }
-        }
-    }
-}
-
 fn reduce(constraint: Constraint) -> Result<Reduction, String> {
     match (constraint.lhs, constraint.rhs) {
         (TypeExpr::Int, TypeExpr::Int) | (TypeExpr::Bool, TypeExpr::Bool) => Ok(Reduction::empty()),
@@ -350,14 +374,14 @@ fn reduce(constraint: Constraint) -> Result<Reduction, String> {
             Constraint::new((*t2).clone(), (*t4).clone()),
         ])),
         (TypeExpr::TypeVar(x), rhs) => {
-            if is_free(&x, &rhs) {
+            if rhs.is_free(&x) {
                 Ok(Reduction::substitution((x, rhs)))
             } else {
                 Err(format!("Failed to unify constraint '{} = {}", x, rhs))
             }
         }
         (lhs, TypeExpr::TypeVar(x)) => {
-            if is_free(&x, &lhs) {
+            if lhs.is_free(&x) {
                 Ok(Reduction::substitution((x, lhs)))
             } else {
                 Err(format!("Failed to unify constraint {} = '{}", lhs, x))
