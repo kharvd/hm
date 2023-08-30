@@ -7,6 +7,7 @@ pub enum Keyword {
     Rec,
     In,
     Val,
+    Forall,
     If,
     Then,
     Else,
@@ -27,6 +28,7 @@ pub enum Token {
     Colon,
     Apostrophe,
     Equals,
+    Dot,
 }
 
 pub fn tokenize(input: &str) -> Result<Vec<Token>, String> {
@@ -47,6 +49,7 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, String> {
                     "rec" => tokens.push(Token::Keyword(Keyword::Rec)),
                     "in" => tokens.push(Token::Keyword(Keyword::In)),
                     "val" => tokens.push(Token::Keyword(Keyword::Val)),
+                    "forall" => tokens.push(Token::Keyword(Keyword::Forall)),
                     "if" => tokens.push(Token::Keyword(Keyword::If)),
                     "then" => tokens.push(Token::Keyword(Keyword::Then)),
                     "else" => tokens.push(Token::Keyword(Keyword::Else)),
@@ -95,6 +98,10 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, String> {
             }
             '=' => {
                 tokens.push(Token::Equals);
+                chars.next();
+            }
+            '.' => {
+                tokens.push(Token::Dot);
                 chars.next();
             }
             ' ' | '\t' | '\n' | '\r' => {

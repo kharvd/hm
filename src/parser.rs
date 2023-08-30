@@ -1,6 +1,8 @@
 use std::iter::Peekable;
 use std::rc::Rc;
 
+use rpds::RedBlackTreeSet;
+
 use crate::ast::{Expr, Statement, TypeExpr};
 use crate::lexer::{tokenize, Keyword, Token};
 
@@ -99,11 +101,49 @@ fn parse_let_name_binding(
 pub fn parse_type_expr(
     tokens: &mut Peekable<impl Iterator<Item = Token>>,
 ) -> Result<TypeExpr, String> {
+    match tokens.peek() {
+        Some(Token::Keyword(Keyword::Forall)) => parse_forall_type_expr(tokens),
+        _ => parse_arrow_type_expr(tokens),
+    }
+}
+
+fn parse_forall_type_expr(
+    tokens: &mut Peekable<impl Iterator<Item = Token>>,
+) -> Result<TypeExpr, String> {
+    tokens.next();
+
+    let mut vars = RedBlackTreeSet::new();
+    loop {
+        match tokens.next() {
+            Some(Token::Apostrophe) => match tokens.next() {
+                Some(Token::Ident(name)) => {
+                    vars = vars.insert(name);
+                }
+                t => {
+                    return Err(format!(
+                        "Expected identifier after apostrophe, but got, {:?}",
+                        t
+                    ))
+                }
+            },
+            Some(Token::Dot) => break,
+            t => return Err(format!("Expected apostrophe or dot, but got {:?}", t)),
+        }
+    }
+
+    let ty = parse_arrow_type_expr(tokens)?;
+
+    Ok(TypeExpr::Forall(vars, Rc::new(ty)))
+}
+
+pub fn parse_arrow_type_expr(
+    tokens: &mut Peekable<impl Iterator<Item = Token>>,
+) -> Result<TypeExpr, String> {
     let mut ty = parse_non_arrow_expr(tokens)?;
 
     if let Some(Token::Arrow) = tokens.peek() {
         tokens.next();
-        ty = TypeExpr::fun(ty, parse_type_expr(tokens)?);
+        ty = TypeExpr::fun(ty, parse_arrow_type_expr(tokens)?);
     }
 
     Ok(ty)
@@ -121,7 +161,7 @@ fn parse_non_arrow_expr(
         Some(Token::Keyword(Keyword::Int)) => TypeExpr::Int,
         Some(Token::Keyword(Keyword::Bool)) => TypeExpr::Bool,
         Some(Token::LParen) => {
-            let ty = parse_type_expr(tokens)?;
+            let ty = parse_arrow_type_expr(tokens)?;
             match tokens.next() {
                 Some(Token::RParen) => ty,
                 _ => return Err("Expected closing parenthesis".to_string()),
@@ -238,7 +278,7 @@ mod tests {
         let mut iter = tokens.into_iter().peekable();
 
         assert_eq!(
-            parse_type_expr(&mut iter),
+            parse_arrow_type_expr(&mut iter),
             Ok(TypeExpr::fun(TypeExpr::Int, TypeExpr::Bool))
         );
     }
@@ -249,7 +289,7 @@ mod tests {
         let mut iter = tokens.into_iter().peekable();
 
         assert_eq!(
-            parse_type_expr(&mut iter),
+            parse_arrow_type_expr(&mut iter),
             Ok(TypeExpr::fun(
                 TypeExpr::Int,
                 TypeExpr::fun(TypeExpr::Bool, TypeExpr::Int)
@@ -263,7 +303,7 @@ mod tests {
         let mut iter = tokens.into_iter().peekable();
 
         assert_eq!(
-            parse_type_expr(&mut iter),
+            parse_arrow_type_expr(&mut iter),
             Ok(TypeExpr::fun(
                 TypeExpr::fun(TypeExpr::type_var("a"), TypeExpr::type_var("b"),),
                 TypeExpr::type_var("a")
@@ -331,6 +371,22 @@ mod tests {
                 "x",
                 Expr::ap(Expr::ident("f"), Expr::ident("y")),
                 Expr::ap(Expr::ident("x"), Expr::int(5))
+            ))
+        );
+    }
+
+    #[test]
+    fn test_type_scheme() {
+        let tokens = lexer::tokenize("forall 'a 'b . 'a -> 'b").unwrap();
+        let mut iter = tokens.into_iter().peekable();
+
+        assert_eq!(
+            parse_type_expr(&mut iter),
+            Ok(TypeExpr::forall(
+                RedBlackTreeSet::new()
+                    .insert("a".to_string())
+                    .insert("b".to_string()),
+                TypeExpr::fun(TypeExpr::type_var("a"), TypeExpr::type_var("b"))
             ))
         );
     }

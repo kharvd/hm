@@ -397,8 +397,6 @@ fn reduce(constraint: Constraint) -> Result<Reduction, String> {
 
 #[cfg(test)]
 mod tests {
-    use rpds::RedBlackTreeSet;
-
     use crate::{
         ast::{Expr, TypeExpr},
         env::Env,
@@ -421,18 +419,18 @@ mod tests {
         crate::parser::parse_type_expr(&mut iter).unwrap()
     }
 
-    fn infer_type(env: &Env, s: &str) -> TypeExpr {
-        infer(env, &parse_expr(s)).unwrap()
+    fn infer_type(env: &Env, s: &str) -> Result<TypeExpr, String> {
+        infer(env, &parse_expr(s))
     }
 
     #[test]
     fn test_simple() {
         let env = Env::prelude();
-        assert_eq!(infer_type(&env, "5"), TypeExpr::Int);
-        assert_eq!(infer_type(&env, "true"), TypeExpr::Bool);
+        assert_eq!(infer_type(&env, "5").unwrap(), TypeExpr::Int);
+        assert_eq!(infer_type(&env, "true").unwrap(), TypeExpr::Bool);
         assert_eq!(
-            infer_type(&env, "fun x -> plus x 1"),
-            TypeExpr::fun(TypeExpr::Int, TypeExpr::Int)
+            infer_type(&env, "fun x -> plus x 1").unwrap(),
+            parse_type_expr("int -> int")
         );
     }
 
@@ -445,25 +443,77 @@ mod tests {
             .new_env;
 
         assert_eq!(
-            infer_type(&env, "id"),
-            TypeExpr::forall(
-                RedBlackTreeSet::new().insert("a".to_string()),
-                TypeExpr::fun(TypeExpr::type_var("a"), TypeExpr::type_var("a")),
-            )
+            infer_type(&env, "id").unwrap(),
+            parse_type_expr("forall 'a. 'a -> 'a")
         );
-        assert_eq!(infer_type(&env, "id 5"), TypeExpr::Int);
+        assert_eq!(infer_type(&env, "id 5").unwrap(), TypeExpr::Int);
         assert_eq!(
-            infer_type(&env, "id neg"),
-            TypeExpr::fun(TypeExpr::Int, TypeExpr::Int)
+            infer_type(&env, "id neg").unwrap(),
+            parse_type_expr("int -> int")
+        );
+        assert_eq!(
+            infer_type(&env, "fun x -> id x").unwrap(),
+            parse_type_expr("forall 'a. 'a -> 'a")
+        );
+        assert_eq!(
+            infer_type(&env, "fun x -> id (id x)").unwrap(),
+            parse_type_expr("forall 'a. 'a -> 'a")
+        )
+    }
+
+    #[test]
+    fn test_if() {
+        let env = Env::prelude();
+        assert_eq!(
+            infer_type(&env, "fun x -> if x then 1 else 2").unwrap(),
+            parse_type_expr("bool -> int")
+        );
+        assert_eq!(
+            infer_type(&env, "fun x -> if x then 1 else true"),
+            Err("Failed to unify constraint bool = int".to_string())
+        );
+        assert_eq!(
+            infer_type(&env, "fun x -> if x then 1 else neg"),
+            Err("Failed to unify constraint int = (int -> int)".to_string())
         );
     }
 
     #[test]
-    fn test_let_in() {
+    fn test_let() {
         let env = Env::prelude();
         assert_eq!(
-            infer_type(&env, "(let id = fun x -> x in (let a = id 0 in id true))"),
+            infer_type(&env, "(let f = fun x -> x in f)").unwrap(),
+            parse_type_expr("forall 'a. 'a -> 'a")
+        );
+        assert_eq!(
+            infer_type(&env, "(let f = fun x -> x in f 5)").unwrap(),
+            TypeExpr::Int
+        );
+        assert_eq!(
+            infer_type(&env, "(let f = fun x -> x in f neg)").unwrap(),
+            parse_type_expr("int -> int")
+        );
+        assert_eq!(
+            infer_type(&env, "(let id = fun x -> x in (let a = id 0 in id true))").unwrap(),
             TypeExpr::Bool
+        );
+    }
+
+    #[test]
+    fn test_fun() {
+        let env = Env::prelude();
+
+        assert_eq!(
+            infer_type(&env, "fun x -> fun y -> x").unwrap(),
+            parse_type_expr("forall 'a 'b. 'a -> 'b -> 'a")
+        );
+        assert_eq!(
+            infer_type(&env, "fun x -> fun y -> y").unwrap(),
+            parse_type_expr("forall 'a 'b. 'a -> 'b -> 'b")
+        );
+        assert_eq!(
+            infer_type(&env, "(let g = fun x -> fun y -> fun z -> y in g 1)").unwrap(),
+            parse_type_expr("forall 'a 'b. 'a -> 'b -> 'a")
         );
     }
 }
