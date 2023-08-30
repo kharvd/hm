@@ -1,7 +1,7 @@
 use std::{fmt::Display, rc::Rc};
 
 use itertools::Itertools;
-use rpds::HashTrieSet;
+use rpds::RedBlackTreeSet;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Expr {
@@ -70,7 +70,7 @@ pub enum TypeExpr {
     Bool,
     Fun(Rc<TypeExpr>, Rc<TypeExpr>),
     TypeVar(String),
-    Forall(HashTrieSet<String>, Rc<TypeExpr>),
+    Forall(RedBlackTreeSet<String>, Rc<TypeExpr>),
 }
 
 impl TypeExpr {
@@ -83,7 +83,7 @@ impl TypeExpr {
         Self::TypeVar(name.to_string())
     }
 
-    pub fn forall(vars: HashTrieSet<String>, ty: TypeExpr) -> Self {
+    pub fn forall(vars: RedBlackTreeSet<String>, ty: TypeExpr) -> Self {
         assert!(!ty.is_scheme());
         Self::Forall(vars, Rc::new(ty))
     }
@@ -129,11 +129,6 @@ pub enum Statement {
 impl Statement {
     pub fn let_(name: &str, expr: Expr) -> Self {
         Self::Let(name.to_string(), Rc::new(expr))
-    }
-
-    #[cfg(test)]
-    pub fn let_rec(name: &str, expr: Expr) -> Self {
-        Self::LetRec(name.to_string(), Rc::new(expr))
     }
 
     #[cfg(test)]
@@ -212,19 +207,19 @@ mod tests {
         );
         assert_eq!(
             ty.free_variables(),
-            HashTrieSet::new()
+            RedBlackTreeSet::new()
                 .insert("a".to_string())
                 .insert("b".to_string())
         );
 
         let ty = TypeExpr::forall(
-            HashTrieSet::new().insert("a".to_string()),
+            RedBlackTreeSet::new().insert("a".to_string()),
             TypeExpr::fun(TypeExpr::type_var("a"), TypeExpr::type_var("b")),
         );
 
         assert_eq!(
             ty.free_variables(),
-            HashTrieSet::new().insert("b".to_string())
+            RedBlackTreeSet::new().insert("b".to_string())
         );
     }
 }

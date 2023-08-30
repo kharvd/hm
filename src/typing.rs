@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use rpds::HashTrieSet;
+use rpds::RedBlackTreeSet;
 
 use crate::{
     ast::{Expr, TypeExpr},
@@ -273,10 +273,10 @@ impl TypeExpr {
         }
     }
 
-    pub fn free_variables(&self) -> HashTrieSet<String> {
+    pub fn free_variables(&self) -> RedBlackTreeSet<String> {
         match self {
-            TypeExpr::Int => HashTrieSet::new(),
-            TypeExpr::Bool => HashTrieSet::new(),
+            TypeExpr::Int => RedBlackTreeSet::new(),
+            TypeExpr::Bool => RedBlackTreeSet::new(),
             TypeExpr::Fun(t1, t2) => {
                 let vars1 = t1.free_variables();
                 let vars2 = t2.free_variables();
@@ -286,7 +286,7 @@ impl TypeExpr {
                 }
                 vars
             }
-            TypeExpr::TypeVar(name) => HashTrieSet::new().insert(name.clone()),
+            TypeExpr::TypeVar(name) => RedBlackTreeSet::new().insert(name.clone()),
             TypeExpr::Forall(vars, ty) => {
                 let mut free_vars = ty.free_variables();
                 for var in vars {
@@ -300,23 +300,27 @@ impl TypeExpr {
     pub fn normalize(self) -> Self {
         match self {
             TypeExpr::Forall(vars, ty) => {
-                let mut counter = 0;
-                let mut substitutions = Vec::new();
-                let mut new_vars = HashTrieSet::new();
+                if vars.is_empty() {
+                    (*ty).clone()
+                } else {
+                    let mut counter = 0;
+                    let mut substitutions = Vec::new();
+                    let mut new_vars = RedBlackTreeSet::new();
 
-                for var in vars.iter() {
-                    let new_name = if counter < 26 {
-                        format!("{}", ('a' as u8 + counter as u8) as char)
-                    } else {
-                        format!("t{}", counter - 26)
-                    };
-                    let type_var = TypeExpr::type_var(new_name.as_str());
-                    counter += 1;
-                    substitutions.push((var.clone(), type_var));
-                    new_vars = new_vars.insert(new_name);
+                    for var in vars.iter() {
+                        let new_name = if counter < 26 {
+                            format!("{}", ('a' as u8 + counter as u8) as char)
+                        } else {
+                            format!("t{}", counter - 26)
+                        };
+                        let type_var = TypeExpr::type_var(new_name.as_str());
+                        counter += 1;
+                        substitutions.push((var.clone(), type_var));
+                        new_vars = new_vars.insert(new_name);
+                    }
+
+                    TypeExpr::forall(new_vars, substitute(&ty, &substitutions))
                 }
-
-                TypeExpr::forall(new_vars, substitute(&ty, &substitutions))
             }
             s => s,
         }
@@ -393,11 +397,13 @@ fn reduce(constraint: Constraint) -> Result<Reduction, String> {
 
 #[cfg(test)]
 mod tests {
+    use rpds::RedBlackTreeSet;
+
     use crate::{
         ast::{Expr, TypeExpr},
         env::Env,
         lexer::tokenize,
-        parser,
+        parser::{self, parse_statement},
     };
 
     use super::infer;
@@ -432,11 +438,32 @@ mod tests {
 
     #[test]
     fn test_polymorphic() {
-        let env = Env::prelude().extend_type("id", parse_type_expr("'a -> 'a"));
+        let mut env = Env::prelude();
+        env = env
+            .eval_statement(&parse_statement("let id = fun x -> x").unwrap())
+            .unwrap()
+            .new_env;
+
+        assert_eq!(
+            infer_type(&env, "id"),
+            TypeExpr::forall(
+                RedBlackTreeSet::new().insert("a".to_string()),
+                TypeExpr::fun(TypeExpr::type_var("a"), TypeExpr::type_var("a")),
+            )
+        );
         assert_eq!(infer_type(&env, "id 5"), TypeExpr::Int);
         assert_eq!(
             infer_type(&env, "id neg"),
             TypeExpr::fun(TypeExpr::Int, TypeExpr::Int)
+        );
+    }
+
+    #[test]
+    fn test_let_in() {
+        let env = Env::prelude();
+        assert_eq!(
+            infer_type(&env, "(let id = fun x -> x in (let a = id 0 in id true))"),
+            TypeExpr::Bool
         );
     }
 }
