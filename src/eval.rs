@@ -10,7 +10,7 @@ use crate::{
 pub struct StatementEval {
     pub new_env: Env,
     pub var_name: String,
-    pub var_type: Rc<TypeExpr>,
+    pub var_type: TypeExpr,
     pub value: Option<Value>,
 }
 
@@ -66,9 +66,9 @@ impl Statement {
                 };
 
                 StatementEval {
-                    new_env: env.extend_type(&name, generalized_type_expr.clone()),
+                    new_env: env.extend_type(&name, (*generalized_type_expr).clone()),
                     var_name: name.clone(),
-                    var_type: generalized_type_expr.clone(),
+                    var_type: (*generalized_type_expr).clone(),
                     value: None,
                 }
             }

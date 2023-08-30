@@ -39,6 +39,20 @@ pub enum TypeExpr {
     Forall(HashTrieSet<String>, Rc<TypeExpr>),
 }
 
+impl TypeExpr {
+    pub fn fun(param: TypeExpr, body: TypeExpr) -> Self {
+        Self::Fun(Rc::new(param), Rc::new(body))
+    }
+
+    pub fn type_var(name: &str) -> Self {
+        Self::TypeVar(name.to_string())
+    }
+
+    pub fn forall(vars: HashTrieSet<String>, ty: TypeExpr) -> Self {
+        Self::Forall(vars, Rc::new(ty))
+    }
+}
+
 impl Display for TypeExpr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -116,12 +130,9 @@ mod tests {
 
     #[test]
     fn display_type_expr() {
-        let ty = TypeExpr::Fun(
-            Rc::new(TypeExpr::Fun(
-                Rc::new(TypeExpr::Int),
-                Rc::new(TypeExpr::TypeVar("a".to_string())),
-            )),
-            Rc::new(TypeExpr::Bool),
+        let ty = TypeExpr::fun(
+            TypeExpr::fun(TypeExpr::Int, TypeExpr::type_var("a")),
+            TypeExpr::Bool,
         );
         assert_eq!(format!("{}", ty), "((int -> 'a) -> bool)");
     }
@@ -155,12 +166,9 @@ mod tests {
 
     #[test]
     fn free_variables() {
-        let ty = TypeExpr::Fun(
-            Rc::new(TypeExpr::Fun(
-                Rc::new(TypeExpr::Int),
-                Rc::new(TypeExpr::TypeVar("a".to_string())),
-            )),
-            Rc::new(TypeExpr::TypeVar("b".to_string())),
+        let ty = TypeExpr::fun(
+            TypeExpr::fun(TypeExpr::Int, TypeExpr::type_var("a")),
+            TypeExpr::type_var("b"),
         );
         assert_eq!(
             ty.free_variables(),
@@ -169,12 +177,9 @@ mod tests {
                 .insert("b".to_string())
         );
 
-        let ty = TypeExpr::Forall(
+        let ty = TypeExpr::forall(
             HashTrieSet::new().insert("a".to_string()),
-            Rc::new(TypeExpr::Fun(
-                Rc::new(TypeExpr::TypeVar("a".to_string())),
-                Rc::new(TypeExpr::TypeVar("b".to_string())),
-            )),
+            TypeExpr::fun(TypeExpr::type_var("a"), TypeExpr::type_var("b")),
         );
 
         assert_eq!(

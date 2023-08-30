@@ -103,7 +103,7 @@ pub fn parse_type_expr(
 
     if let Some(Token::Arrow) = tokens.peek() {
         tokens.next();
-        ty = TypeExpr::Fun(Rc::new(ty), Rc::new(parse_type_expr(tokens)?));
+        ty = TypeExpr::fun(ty, parse_type_expr(tokens)?);
     }
 
     Ok(ty)

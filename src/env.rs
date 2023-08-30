@@ -10,7 +10,7 @@ use crate::{ast::TypeExpr, value::Value};
 #[derive(Clone, PartialEq)]
 pub struct Env {
     pub vars: HashTrieMap<String, Value>,
-    pub typings: HashTrieMap<String, Rc<TypeExpr>>,
+    pub typings: HashTrieMap<String, TypeExpr>,
 }
 
 impl Debug for Env {
@@ -44,7 +44,7 @@ impl Env {
         }
     }
 
-    pub fn extend_type(&self, name: &str, var_type: Rc<TypeExpr>) -> Self {
+    pub fn extend_type(&self, name: &str, var_type: TypeExpr) -> Self {
         Self {
             vars: self.vars.clone(),
             typings: self.typings.insert(name.to_string(), var_type),
@@ -58,7 +58,7 @@ impl Env {
         }
     }
 
-    pub fn resolve_type(&self, name: &String) -> Result<Rc<TypeExpr>, String> {
+    pub fn resolve_type(&self, name: &String) -> Result<TypeExpr, String> {
         match self.typings.get(name) {
             Some(value) => Ok(value.clone()),
             None => Err(format!("Unknown identifier {}", name)),

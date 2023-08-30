@@ -1,4 +1,4 @@
-use std::{borrow::Borrow, fmt::Display, rc::Rc};
+use std::{borrow::Borrow, fmt::Display};
 
 use rpds::HashTrieSet;
 
@@ -9,12 +9,12 @@ use crate::{
 
 #[derive(Clone)]
 struct Constraint {
-    lhs: Rc<TypeExpr>,
-    rhs: Rc<TypeExpr>,
+    lhs: TypeExpr,
+    rhs: TypeExpr,
 }
 
 impl Constraint {
-    fn new(lhs: Rc<TypeExpr>, rhs: Rc<TypeExpr>) -> Self {
+    fn new(lhs: TypeExpr, rhs: TypeExpr) -> Self {
         Constraint { lhs, rhs }
     }
 }
@@ -26,7 +26,7 @@ impl Display for Constraint {
 }
 
 pub struct Inference {
-    inferred_type: Rc<TypeExpr>,
+    inferred_type: TypeExpr,
     constraints: Vec<Constraint>,
 }
 
@@ -40,7 +40,7 @@ impl Display for Inference {
     }
 }
 
-pub fn infer(env: &Env, expr: &Expr) -> Result<Rc<TypeExpr>, String> {
+pub fn infer(env: &Env, expr: &Expr) -> Result<TypeExpr, String> {
     let inference = infer_constraints(env, expr)?;
     // print!("{} {}\n", expr, inference);
     let (inferred, _) = unify(inference)?;
@@ -59,8 +59,8 @@ fn infer_constraints(env: &Env, expr: &Expr) -> Result<Inference, String> {
     infer_constraints_inner(env, expr, &mut type_var_counter)
 }
 
-fn allocate_type_var(counter: &mut u64) -> Rc<TypeExpr> {
-    let type_var = Rc::new(TypeExpr::TypeVar(format!("t{}", counter)));
+fn allocate_type_var(counter: &mut u64) -> TypeExpr {
+    let type_var = TypeExpr::type_var(format!("t{}", counter).as_str());
     *counter += 1;
     type_var
 }
@@ -72,11 +72,11 @@ fn infer_constraints_inner(
 ) -> Result<Inference, String> {
     Ok(match expr {
         Expr::Int(_) => Inference {
-            inferred_type: Rc::new(TypeExpr::Int),
+            inferred_type: TypeExpr::Int,
             constraints: Vec::new(),
         },
         Expr::Bool(_) => Inference {
-            inferred_type: Rc::new(TypeExpr::Bool),
+            inferred_type: TypeExpr::Bool,
             constraints: Vec::new(),
         },
         Expr::Ident(name) => {
@@ -101,10 +101,7 @@ fn infer_constraints_inner(
             new_constraints.append(&mut infer_cond.constraints);
             new_constraints.append(&mut infer_if_true.constraints);
             new_constraints.append(&mut infer_if_false.constraints);
-            new_constraints.push(Constraint::new(
-                infer_cond.inferred_type,
-                Rc::new(TypeExpr::Bool),
-            ));
+            new_constraints.push(Constraint::new(infer_cond.inferred_type, TypeExpr::Bool));
             new_constraints.push(Constraint::new(
                 type_var.clone(),
                 infer_if_true.inferred_type,
@@ -125,7 +122,7 @@ fn infer_constraints_inner(
             let infer_body = infer_constraints_inner(&inner_env, body, type_var_counter)?;
 
             Inference {
-                inferred_type: Rc::new(TypeExpr::Fun(type_var, infer_body.inferred_type)),
+                inferred_type: TypeExpr::fun(type_var, infer_body.inferred_type),
                 constraints: infer_body.constraints,
             }
         }
@@ -140,7 +137,7 @@ fn infer_constraints_inner(
             new_constraints.append(&mut infer_arg.constraints);
             new_constraints.push(Constraint::new(
                 infer_func.inferred_type,
-                Rc::new(TypeExpr::Fun(infer_arg.inferred_type, type_var.clone())),
+                TypeExpr::fun(infer_arg.inferred_type, type_var.clone()),
             ));
 
             Inference {
@@ -171,7 +168,7 @@ fn infer_constraints_inner(
     })
 }
 
-fn generalize(env: &Env, infer_bound: Inference) -> Result<(Rc<TypeExpr>, Env), String> {
+fn generalize(env: &Env, infer_bound: Inference) -> Result<(TypeExpr, Env), String> {
     let (unified_bound, substitutions) = unify(infer_bound)?;
     let new_env = env.substitute(&substitutions);
 
@@ -183,36 +180,33 @@ fn generalize(env: &Env, infer_bound: Inference) -> Result<(Rc<TypeExpr>, Env), 
         new_type_vars = new_type_vars.remove(var);
     }
 
-    let generalized_type = Rc::new(TypeExpr::Forall(new_type_vars, unified_bound));
+    let generalized_type = TypeExpr::forall(new_type_vars, unified_bound);
 
     Ok((generalized_type, new_env))
 }
 
-fn instantiate(
-    type_expr: Rc<TypeExpr>,
-    type_var_counter: &mut u64,
-) -> Result<Rc<TypeExpr>, String> {
-    match type_expr.borrow() {
+fn instantiate(type_expr: TypeExpr, type_var_counter: &mut u64) -> Result<TypeExpr, String> {
+    match type_expr {
         TypeExpr::Forall(vars, ty) => {
             let mut substitutions = Vec::new();
-            for var in vars {
+            for var in vars.iter() {
                 substitutions.push((var.clone(), allocate_type_var(type_var_counter)));
             }
-            Ok(substitute(ty.clone(), &substitutions))
+            Ok(substitute(&ty, &substitutions))
         }
-        _ => Ok(type_expr),
+        _ => Ok(type_expr.clone()),
     }
 }
 
-type Substitution = (String, Rc<TypeExpr>);
+type Substitution = (String, TypeExpr);
 
-fn unify(inference: Inference) -> Result<(Rc<TypeExpr>, Vec<Substitution>), String> {
+fn unify(inference: Inference) -> Result<(TypeExpr, Vec<Substitution>), String> {
     let mut constraints = inference.constraints;
     let mut substitutions: Vec<Substitution> = Vec::new();
     while let Some(constraint) = constraints.pop() {
         let constraint = Constraint::new(
-            substitute(constraint.lhs, &substitutions),
-            substitute(constraint.rhs, &substitutions),
+            substitute(&constraint.lhs, &substitutions),
+            substitute(&constraint.rhs, &substitutions),
         );
 
         let Reduction {
@@ -230,25 +224,22 @@ fn unify(inference: Inference) -> Result<(Rc<TypeExpr>, Vec<Substitution>), Stri
     }
 
     Ok((
-        substitute(inference.inferred_type, &substitutions),
+        substitute(&inference.inferred_type, &substitutions),
         substitutions,
     ))
 }
 
-fn substitute(t: Rc<TypeExpr>, substitutions: &Vec<Substitution>) -> Rc<TypeExpr> {
+fn substitute(t: &TypeExpr, substitutions: &Vec<Substitution>) -> TypeExpr {
     substitutions
         .into_iter()
-        .fold(t, |acc, sub| substitute_one(acc, sub))
+        .fold(t.clone(), |acc, sub| substitute_one(&acc, sub))
 }
 
-fn substitute_one(t: Rc<TypeExpr>, sub: &Substitution) -> Rc<TypeExpr> {
+fn substitute_one(t: &TypeExpr, sub: &Substitution) -> TypeExpr {
     match t.borrow() {
         TypeExpr::Int => t.clone(),
         TypeExpr::Bool => t.clone(),
-        TypeExpr::Fun(t1, t2) => Rc::new(TypeExpr::Fun(
-            substitute_one(t1.clone(), sub),
-            substitute_one(t2.clone(), sub),
-        )),
+        TypeExpr::Fun(t1, t2) => TypeExpr::fun(substitute_one(t1, sub), substitute_one(t2, sub)),
         TypeExpr::TypeVar(name) => {
             if name == &sub.0 {
                 sub.1.clone()
@@ -260,10 +251,7 @@ fn substitute_one(t: Rc<TypeExpr>, sub: &Substitution) -> Rc<TypeExpr> {
             if vars.contains(&sub.0) {
                 t.clone()
             } else {
-                Rc::new(TypeExpr::Forall(
-                    vars.clone(),
-                    substitute_one(ty.clone(), sub),
-                ))
+                TypeExpr::forall(vars.clone(), substitute_one(ty, sub))
             }
         }
     }
@@ -299,7 +287,7 @@ impl Env {
     fn substitute(&self, substitutions: &Vec<Substitution>) -> Self {
         let mut new_env = self.clone();
         for (name, ty) in self.typings.iter() {
-            new_env = new_env.extend_type(name, substitute(ty.clone(), substitutions));
+            new_env = new_env.extend_type(name, substitute(ty, substitutions));
         }
         new_env
     }
@@ -331,58 +319,56 @@ impl Reduction {
     }
 }
 
-fn is_free(name: &String, type_expr: Rc<TypeExpr>) -> bool {
+fn is_free(name: &String, type_expr: &TypeExpr) -> bool {
     match type_expr.borrow() {
         TypeExpr::Int => true,
         TypeExpr::Bool => true,
-        TypeExpr::Fun(t1, t2) => is_free(name, t1.clone()) && is_free(name, t2.clone()),
+        TypeExpr::Fun(t1, t2) => is_free(name, t1) && is_free(name, t2),
         TypeExpr::TypeVar(other_name) => name != other_name,
         TypeExpr::Forall(vars, ty) => {
             if vars.contains(name) {
                 true
             } else {
-                is_free(name, ty.clone())
+                is_free(name, ty)
             }
         }
     }
 }
 
 fn reduce(constraint: Constraint) -> Result<Reduction, String> {
-    match (constraint.lhs.borrow(), constraint.rhs.borrow()) {
+    match (constraint.lhs, constraint.rhs) {
         (TypeExpr::Int, TypeExpr::Int) | (TypeExpr::Bool, TypeExpr::Bool) => Ok(Reduction::empty()),
         (TypeExpr::TypeVar(x), TypeExpr::TypeVar(y)) => {
             if x == y {
                 Ok(Reduction::empty())
             } else {
-                Ok(Reduction::substitution((x.clone(), constraint.rhs.clone())))
+                Ok(Reduction::substitution((x.clone(), TypeExpr::TypeVar(y))))
             }
         }
         (TypeExpr::Fun(t1, t2), TypeExpr::Fun(t3, t4)) => Ok(Reduction::constraint(vec![
-            Constraint::new(t1.clone(), t3.clone()),
-            Constraint::new(t2.clone(), t4.clone()),
+            Constraint::new((*t1).clone(), (*t3).clone()),
+            Constraint::new((*t2).clone(), (*t4).clone()),
         ])),
-        (TypeExpr::TypeVar(x), _) => {
-            if is_free(x, constraint.rhs.clone()) {
-                Ok(Reduction::substitution((x.clone(), constraint.rhs.clone())))
+        (TypeExpr::TypeVar(x), rhs) => {
+            if is_free(&x, &rhs) {
+                Ok(Reduction::substitution((x, rhs)))
             } else {
-                Err(format!("Failed to unify constraint {}", constraint))
+                Err(format!("Failed to unify constraint '{} = {}", x, rhs))
             }
         }
-        (_, TypeExpr::TypeVar(x)) => {
-            if is_free(x, constraint.lhs.clone()) {
-                Ok(Reduction::substitution((x.clone(), constraint.lhs.clone())))
+        (lhs, TypeExpr::TypeVar(x)) => {
+            if is_free(&x, &lhs) {
+                Ok(Reduction::substitution((x, lhs)))
             } else {
-                Err(format!("Failed to unify constraint {}", constraint))
+                Err(format!("Failed to unify constraint {} = '{}", lhs, x))
             }
         }
-        _ => Err(format!("Failed to unify constraint {}", constraint)),
+        (lhs, rhs) => Err(format!("Failed to unify constraint {} = {}", lhs, rhs)),
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::rc::Rc;
-
     use crate::{
         ast::{Expr, TypeExpr},
         env::Env,
@@ -405,34 +391,28 @@ mod tests {
         crate::parser::parse_type_expr(&mut iter).unwrap()
     }
 
-    fn infer_type(env: &Env, s: &str) -> Rc<TypeExpr> {
-        infer(env, &parse_expr(s)).unwrap().to_owned()
+    fn infer_type(env: &Env, s: &str) -> TypeExpr {
+        infer(env, &parse_expr(s)).unwrap()
     }
 
     #[test]
     fn test_simple() {
         let env = Env::prelude();
-        assert_eq!(infer_type(&env, "5"), Rc::new(TypeExpr::Int));
-        assert_eq!(infer_type(&env, "true"), Rc::new(TypeExpr::Bool));
+        assert_eq!(infer_type(&env, "5"), TypeExpr::Int);
+        assert_eq!(infer_type(&env, "true"), TypeExpr::Bool);
         assert_eq!(
             infer_type(&env, "fun x -> plus x 1"),
-            Rc::new(TypeExpr::Fun(
-                Rc::new(TypeExpr::Int),
-                Rc::new(TypeExpr::Int)
-            ))
+            TypeExpr::fun(TypeExpr::Int, TypeExpr::Int)
         );
     }
 
     #[test]
     fn test_polymorphic() {
-        let env = Env::prelude().extend_type("id", Rc::new(parse_type_expr("'a -> 'a")));
-        assert_eq!(infer_type(&env, "id 5"), Rc::new(TypeExpr::Int));
+        let env = Env::prelude().extend_type("id", parse_type_expr("'a -> 'a"));
+        assert_eq!(infer_type(&env, "id 5"), TypeExpr::Int);
         assert_eq!(
             infer_type(&env, "id neg"),
-            Rc::new(TypeExpr::Fun(
-                Rc::new(TypeExpr::Int),
-                Rc::new(TypeExpr::Int)
-            ))
+            TypeExpr::fun(TypeExpr::Int, TypeExpr::Int)
         );
     }
 }
