@@ -4,15 +4,50 @@ use itertools::Itertools;
 use rpds::RedBlackTreeSet;
 
 #[derive(Debug, PartialEq, Clone)]
+pub enum ExprPattern {
+    Int(i64),
+    Bool(bool),
+    Variable(String),
+    Wildcard,
+    Constructor(String, Vec<Rc<ExprPattern>>),
+}
+
+impl Display for ExprPattern {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ExprPattern::Int(n) => write!(f, "{}", n),
+            ExprPattern::Bool(b) => write!(f, "{}", b),
+            ExprPattern::Variable(s) => write!(f, "{}", s),
+            ExprPattern::Wildcard => write!(f, "_"),
+            ExprPattern::Constructor(name, args) => {
+                if args.is_empty() {
+                    write!(f, "{}", name)
+                } else {
+                    write!(
+                        f,
+                        "({} {})",
+                        name,
+                        args.iter()
+                            .map(|x| x.to_string())
+                            .collect::<Vec<_>>()
+                            .join(" ")
+                    )
+                }
+            }
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
 pub enum Expr {
     Int(i64),
     Bool(bool),
     Ident(String),
-    Placeholder,
     If(Rc<Expr>, Rc<Expr>, Rc<Expr>),
     Let(String, Rc<Expr>, Rc<Expr>),
     Lambda(String, Rc<Expr>),
     Ap(Rc<Expr>, Rc<Expr>),
+    Match(Rc<Expr>, Vec<(Rc<ExprPattern>, Rc<Expr>)>),
 }
 
 impl Expr {
@@ -55,13 +90,22 @@ impl Display for Expr {
             Expr::Int(n) => write!(f, "{}", n),
             Expr::Bool(b) => write!(f, "{}", b),
             Expr::Ident(s) => write!(f, "{}", s),
-            Expr::Placeholder => write!(f, "_"),
             Expr::If(cond, then, else_) => {
                 write!(f, "(if {} then {} else {})", cond, then, else_)
             }
             Expr::Lambda(param, body) => write!(f, "(fun {} -> {})", param, body),
             Expr::Ap(fun, arg) => write!(f, "({} {})", fun, arg),
             Expr::Let(name, expr, body) => write!(f, "(let {} = {} in {})", name, expr, body),
+            Expr::Match(expr, patterns) => write!(
+                f,
+                "(match {} with {})",
+                expr,
+                patterns
+                    .iter()
+                    .map(|(pat, body)| format!("| {} -> {}", pat, body))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            ),
         }
     }
 }

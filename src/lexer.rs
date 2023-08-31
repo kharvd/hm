@@ -5,6 +5,8 @@ pub enum Keyword {
     Fun,
     Let,
     Rec,
+    Match,
+    With,
     Data,
     In,
     Val,
@@ -20,7 +22,8 @@ pub enum Keyword {
 
 #[derive(Debug, PartialEq)]
 pub enum Token {
-    Ident(String),
+    Variable(String),
+    Constructor(String),
     Int(i64),
     Keyword(Keyword),
     LParen,
@@ -50,6 +53,8 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, String> {
                     "fun" => tokens.push(Token::Keyword(Keyword::Fun)),
                     "let" => tokens.push(Token::Keyword(Keyword::Let)),
                     "rec" => tokens.push(Token::Keyword(Keyword::Rec)),
+                    "match" => tokens.push(Token::Keyword(Keyword::Match)),
+                    "with" => tokens.push(Token::Keyword(Keyword::With)),
                     "data" => tokens.push(Token::Keyword(Keyword::Data)),
                     "in" => tokens.push(Token::Keyword(Keyword::In)),
                     "val" => tokens.push(Token::Keyword(Keyword::Val)),
@@ -61,7 +66,13 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, String> {
                     "false" => tokens.push(Token::Keyword(Keyword::False)),
                     "bool" => tokens.push(Token::Keyword(Keyword::Bool)),
                     "int" => tokens.push(Token::Keyword(Keyword::Int)),
-                    _ => tokens.push(Token::Ident(ident)),
+                    s => {
+                        if s.starts_with(char::is_uppercase) {
+                            tokens.push(Token::Constructor(ident))
+                        } else {
+                            tokens.push(Token::Variable(ident))
+                        }
+                    }
                 }
             }
             '0'..='9' => {
@@ -137,15 +148,15 @@ mod tests {
             tokenize("fun x -> (fun y -> plus x y)"),
             Ok(vec![
                 Token::Keyword(Keyword::Fun),
-                Token::Ident("x".to_string()),
+                Token::Variable("x".to_string()),
                 Token::Arrow,
                 Token::LParen,
                 Token::Keyword(Keyword::Fun),
-                Token::Ident("y".to_string()),
+                Token::Variable("y".to_string()),
                 Token::Arrow,
-                Token::Ident("plus".to_string()),
-                Token::Ident("x".to_string()),
-                Token::Ident("y".to_string()),
+                Token::Variable("plus".to_string()),
+                Token::Variable("x".to_string()),
+                Token::Variable("y".to_string()),
                 Token::RParen,
             ])
         );
@@ -153,7 +164,7 @@ mod tests {
             tokenize("'x : int"),
             Ok(vec![
                 Token::Apostrophe,
-                Token::Ident("x".to_string()),
+                Token::Variable("x".to_string()),
                 Token::Colon,
                 Token::Keyword(Keyword::Int),
             ])
@@ -165,19 +176,19 @@ mod tests {
                 Token::Keyword(Keyword::True),
                 Token::Keyword(Keyword::Then),
                 Token::LParen,
-                Token::Ident("mul".to_string()),
-                Token::Ident("x".to_string()),
-                Token::Ident("y".to_string()),
+                Token::Variable("mul".to_string()),
+                Token::Variable("x".to_string()),
+                Token::Variable("y".to_string()),
                 Token::RParen,
                 Token::Keyword(Keyword::Else),
                 Token::LParen,
                 Token::LParen,
                 Token::Keyword(Keyword::Fun),
-                Token::Ident("x".to_string()),
+                Token::Variable("x".to_string()),
                 Token::Arrow,
-                Token::Ident("x".to_string()),
+                Token::Variable("x".to_string()),
                 Token::RParen,
-                Token::Ident("x".to_string()),
+                Token::Variable("x".to_string()),
                 Token::RParen,
             ])
         );
@@ -186,12 +197,12 @@ mod tests {
             tokenize("let f = fun x -> x"),
             Ok(vec![
                 Token::Keyword(Keyword::Let),
-                Token::Ident("f".to_string()),
+                Token::Variable("f".to_string()),
                 Token::Equals,
                 Token::Keyword(Keyword::Fun),
-                Token::Ident("x".to_string()),
+                Token::Variable("x".to_string()),
                 Token::Arrow,
-                Token::Ident("x".to_string()),
+                Token::Variable("x".to_string()),
             ])
         );
 
@@ -199,7 +210,7 @@ mod tests {
             tokenize("(neg 1)"),
             Ok(vec![
                 Token::LParen,
-                Token::Ident("neg".to_string()),
+                Token::Variable("neg".to_string()),
                 Token::Int(1),
                 Token::RParen,
             ])
@@ -209,14 +220,14 @@ mod tests {
             tokenize("let f = fun x -> x in f 5"),
             Ok(vec![
                 Token::Keyword(Keyword::Let),
-                Token::Ident("f".to_string()),
+                Token::Variable("f".to_string()),
                 Token::Equals,
                 Token::Keyword(Keyword::Fun),
-                Token::Ident("x".to_string()),
+                Token::Variable("x".to_string()),
                 Token::Arrow,
-                Token::Ident("x".to_string()),
+                Token::Variable("x".to_string()),
                 Token::Keyword(Keyword::In),
-                Token::Ident("f".to_string()),
+                Token::Variable("f".to_string()),
                 Token::Int(5),
             ])
         );

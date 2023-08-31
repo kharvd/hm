@@ -79,13 +79,6 @@ fn infer_constraints_inner(
             inferred_type: TypeExpr::Bool,
             constraints: Vec::new(),
         },
-        Expr::Placeholder => {
-            let type_var = allocate_type_var(type_var_counter);
-            Inference {
-                inferred_type: type_var,
-                constraints: Vec::new(),
-            }
-        }
         Expr::Ident(name) => {
             let type_var = allocate_type_var(type_var_counter);
             let ident_type = env.resolve_type(name)?;
@@ -171,6 +164,7 @@ fn infer_constraints_inner(
                 constraints: new_constraints,
             }
         }
+        Expr::Match(_, _) => todo!(),
     })
 }
 
