@@ -24,6 +24,15 @@ impl Env {
     pub fn eval_expr(&self, expr: &Expr) -> Result<Value, String> {
         expr.eval(self)
     }
+
+    pub fn eval_file(&self, file: &str) -> Result<Env, String> {
+        let statements = crate::parser::parse_file(file)?;
+        let mut env = self.clone();
+        for statement in statements {
+            env = env.eval_statement(&statement)?.new_env;
+        }
+        Ok(env)
+    }
 }
 
 impl Statement {

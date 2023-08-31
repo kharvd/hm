@@ -32,6 +32,16 @@ pub fn parse_statement(s: &str) -> Result<Statement, String> {
     parse_stmt(&mut iter)
 }
 
+pub fn parse_file(file: &str) -> Result<Vec<Statement>, String> {
+    let tokens = tokenize(file)?;
+    let mut iter = tokens.into_iter().peekable();
+    let mut statements = Vec::new();
+    while iter.peek().is_some() {
+        statements.push(parse_stmt(&mut iter)?);
+    }
+    Ok(statements)
+}
+
 pub fn parse_stmt(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<Statement, String> {
     let statement = match tokens.peek() {
         Some(Token::Keyword(Keyword::Let)) => parse_let_statement(tokens)?,

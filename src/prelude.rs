@@ -40,18 +40,62 @@ impl Env {
 
             val fix : ('a -> 'a) -> 'a
             let eq = fun x -> fun y -> and (leq x y) (geq x y)
+                
+            data Pair 'a 'b = Pair 'a 'b
+            let fst = fun p -> match p with | Pair x y -> x
+            let snd = fun p -> match p with | Pair x y -> y
+
+            data List 'a = Nil | Cons 'a (List 'a)
+            let nil = Nil
+            let cons = fun x -> fun xs -> Cons x xs
+            let rec len = fun xs -> 
+                match xs with 
+                | Nil -> 0 
+                | Cons x xs -> plus 1 (len xs)
+
+            let rec map = fun f -> fun xs ->
+                match xs with
+                | Nil -> Nil
+                | Cons x xs -> Cons (f x) (map f xs)
+            
+            let rec foldl = fun f -> fun acc -> fun xs ->
+                match xs with
+                | Nil -> acc
+                | Cons x xs -> foldl f (f acc x) xs
+
+            let rec foldr = fun f -> fun acc -> fun xs ->
+                match xs with
+                | Nil -> acc
+                | Cons x xs -> f x (foldr f acc xs)
+            
+            let rec sum = fun xs -> foldl plus 0 xs
+            let rec product = fun xs -> foldl mult 1 xs
+            let rec all = fun xs -> foldl and true xs
+            let rec any = fun xs -> foldl or false xs
+
+            let rec take = fun n -> fun xs ->
+                if eq n 0 then Nil else
+                match xs with
+                | Nil -> Nil
+                | Cons x xs -> Cons x (take (minus n 1) xs)
+            
+            let rec drop = fun n -> fun xs ->
+                if eq n 0 then xs else
+                match xs with
+                | Nil -> Nil
+                | Cons x xs -> drop (minus n 1) xs
+            
+            let rec append = fun xs -> fun ys ->
+                match xs with
+                | Nil -> ys
+                | Cons x xs -> Cons x (append xs ys)
+            
+            let rec reverse = fun xs -> foldl (fun acc -> fun x -> Cons x acc) Nil xs
 
             let rec fact = fun n -> if eq n 0 then 1 else mult n (fact (minus n 1))
             let rec fib = fun n -> if or (eq n 0) (eq n 1) then 1 else plus (fib (minus n 1)) (fib (minus n 2))
         ";
 
-        for line in prelude_source.lines() {
-            if line.trim().len() > 0 {
-                let stmt_eval = env.eval_statement(&parse_statement(line).unwrap()).unwrap();
-                env = stmt_eval.new_env
-            }
-        }
-
-        env
+        env.eval_file(prelude_source).unwrap()
     }
 }
