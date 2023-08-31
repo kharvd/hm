@@ -31,6 +31,7 @@ pub enum Token {
     Equals,
     Dot,
     Pipe,
+    Underscore,
 }
 
 pub fn tokenize(input: &str) -> Result<Vec<Token>, String> {
@@ -109,6 +110,10 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, String> {
             }
             '|' => {
                 tokens.push(Token::Pipe);
+                chars.next();
+            }
+            '_' => {
+                tokens.push(Token::Underscore);
                 chars.next();
             }
             ' ' | '\t' | '\n' | '\r' => {

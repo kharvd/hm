@@ -188,6 +188,7 @@ impl Expr {
                     _ => Err(format!("Expected function, got {}", func_eval)),
                 }
             }
+            Expr::Placeholder => Err("Unexpected placeholder expression".to_string()),
         }
     }
 }

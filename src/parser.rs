@@ -250,6 +250,7 @@ fn parse_expr(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<Expr
             Token::LParen
             | Token::Ident(_)
             | Token::Int(_)
+            | Token::Underscore
             | Token::Keyword(Keyword::True)
             | Token::Keyword(Keyword::False) => {
                 expr = Expr::Ap(Rc::new(expr), Rc::new(parse_non_ap_expr(tokens)?));
@@ -267,6 +268,7 @@ fn parse_non_ap_expr(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Resu
         Some(Token::Int(i)) => Expr::Int(i),
         Some(Token::Keyword(Keyword::True)) => Expr::Bool(true),
         Some(Token::Keyword(Keyword::False)) => Expr::Bool(false),
+        Some(Token::Underscore) => Expr::Placeholder,
         Some(Token::Keyword(Keyword::If)) => {
             let cond = Rc::new(parse_expr(tokens)?);
             match tokens.next() {
@@ -538,3 +540,7 @@ mod tests {
         );
     }
 }
+
+/*
+   match_expr ::= match expr_0 with | pat_1 -> expr_1 | pat_2 -> expr_2 | ...  | pat_n -> expr_n
+*/

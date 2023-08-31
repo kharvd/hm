@@ -8,6 +8,7 @@ pub enum Expr {
     Int(i64),
     Bool(bool),
     Ident(String),
+    Placeholder,
     If(Rc<Expr>, Rc<Expr>, Rc<Expr>),
     Let(String, Rc<Expr>, Rc<Expr>),
     Lambda(String, Rc<Expr>),
@@ -54,6 +55,7 @@ impl Display for Expr {
             Expr::Int(n) => write!(f, "{}", n),
             Expr::Bool(b) => write!(f, "{}", b),
             Expr::Ident(s) => write!(f, "{}", s),
+            Expr::Placeholder => write!(f, "_"),
             Expr::If(cond, then, else_) => {
                 write!(f, "(if {} then {} else {})", cond, then, else_)
             }
