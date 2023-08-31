@@ -552,4 +552,64 @@ mod tests {
             parse_type_expr("int -> Sign")
         )
     }
+
+    #[test]
+    fn test_parameterized_data() {
+        let mut env = Env::prelude();
+        env = env
+            .eval_statement(&parse_statement("data Maybe 'a = Nothing | Just 'a").unwrap())
+            .unwrap()
+            .new_env;
+
+        assert_eq!(
+            infer_type(&env, "Nothing").unwrap(),
+            parse_type_expr("forall 'a. Maybe 'a")
+        );
+        assert_eq!(
+            infer_type(&env, "Just 5").unwrap(),
+            parse_type_expr("Maybe int")
+        );
+        assert_eq!(
+            infer_type(&env, "Just true").unwrap(),
+            parse_type_expr("Maybe bool")
+        );
+        assert_eq!(
+            infer_type(&env, "fun x -> Just x").unwrap(),
+            parse_type_expr("forall 'a. 'a -> Maybe 'a")
+        );
+        assert_eq!(
+            infer_type(&env, "fun x -> Just (Just x)").unwrap(),
+            parse_type_expr("forall 'a. 'a -> Maybe (Maybe 'a)")
+        );
+        assert_eq!(
+            infer_type(&env, "fun x -> Just (Just (Just x))").unwrap(),
+            parse_type_expr("forall 'a. 'a -> Maybe (Maybe (Maybe 'a))")
+        );
+    }
+
+    #[test]
+    fn test_pair() {
+        let mut env = Env::prelude();
+        env = env
+            .eval_statement(&parse_statement("data Pair 'a 'b = Pair 'a 'b").unwrap())
+            .unwrap()
+            .new_env;
+
+        assert_eq!(
+            infer_type(&env, "Pair 5 true").unwrap(),
+            parse_type_expr("Pair int bool")
+        );
+        assert_eq!(
+            infer_type(&env, "fun x -> Pair x 5").unwrap(),
+            parse_type_expr("forall 'a. 'a -> Pair 'a int")
+        );
+        assert_eq!(
+            infer_type(&env, "fun x -> Pair x true").unwrap(),
+            parse_type_expr("forall 'a. 'a -> Pair 'a bool")
+        );
+        assert_eq!(
+            infer_type(&env, "fun x -> fun y -> Pair y (Pair x true)").unwrap(),
+            parse_type_expr("forall 'a 'b. 'a -> 'b -> Pair 'b (Pair 'a bool)")
+        );
+    }
 }
