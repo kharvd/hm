@@ -164,7 +164,14 @@ fn infer_constraints_inner(
                 constraints: new_constraints,
             }
         }
-        Expr::Match(_, _) => todo!(),
+        Expr::Match(_, _) => {
+            // todo!()
+            let type_var = allocate_type_var(type_var_counter);
+            Inference {
+                inferred_type: type_var,
+                constraints: Vec::new(),
+            }
+        }
     })
 }
 

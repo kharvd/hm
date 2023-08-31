@@ -11,6 +11,7 @@ mod env;
 mod eval;
 mod lexer;
 mod parser;
+mod pattern;
 mod prelude;
 mod typing;
 mod value;

@@ -3,6 +3,7 @@ use std::{borrow::Borrow, rc::Rc};
 use crate::{
     ast::{Expr, Statement, TypeExpr},
     env::Env,
+    pattern::try_pattern_match,
     typing::infer,
     value::Value,
 };
@@ -188,7 +189,16 @@ impl Expr {
                     _ => Err(format!("Expected function, got {}", func_eval)),
                 }
             }
-            Expr::Match(_, _) => todo!(),
+            Expr::Match(expr, patterns) => {
+                let eval_expr = expr.eval(env)?;
+                for (choice_pattern, choice_expr) in patterns {
+                    if let Some(bound_env) = try_pattern_match(env, &eval_expr, choice_pattern) {
+                        let choice_expr_eval = choice_expr.eval(&bound_env)?;
+                        return Ok(choice_expr_eval);
+                    }
+                }
+                Err(format!("No match for {}", eval_expr))
+            }
         }
     }
 }
@@ -331,5 +341,60 @@ mod tests {
                 ]
             )
         );
+    }
+
+    #[test]
+    fn match_constant() {
+        let env = eval_statements(
+            Env::prelude(),
+            vec![
+                "data Sign = Negative | Zero | Positive",
+                "let f = fun x ->
+                   match x with
+                     | Negative -> 0
+                     | Zero -> 1
+                     | Positive -> 2",
+            ],
+        );
+
+        assert_eq!(eval_env(env.clone(), "f Negative"), Value::Int(0));
+        assert_eq!(eval_env(env.clone(), "f Zero"), Value::Int(1));
+        assert_eq!(eval_env(env.clone(), "f Positive"), Value::Int(2));
+    }
+
+    #[test]
+    fn match_pair() {
+        let env = eval_statements(
+            Env::prelude(),
+            vec![
+                "data Pair 'a 'b = Pair 'a 'b",
+                "let f = fun x ->
+                   match x with
+                     | Pair a b -> plus a b",
+            ],
+        );
+
+        assert_eq!(eval_env(env.clone(), "f (Pair 1 2)"), Value::Int(3));
+    }
+
+    #[test]
+    fn match_list() {
+        let env = eval_statements(
+            Env::prelude(),
+            vec![
+                "data List 'a = Nil | Cons 'a (List 'a)",
+                "let rec len = fun l ->
+                   match l with
+                     | Nil -> 0
+                     | Cons _ xs -> plus 1 (len xs)",
+            ],
+        );
+
+        assert_eq!(
+            eval_env(env.clone(), "len (Cons 1 (Cons 2 (Cons 3 Nil)))"),
+            Value::Int(3)
+        );
+
+        assert_eq!(eval_env(env.clone(), "len Nil"), Value::Int(0));
     }
 }
