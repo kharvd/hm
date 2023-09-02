@@ -40,6 +40,10 @@ pub enum Token {
     Underscore,
 }
 
+pub fn is_valid_identifier_char(c: char) -> bool {
+    c.is_ascii_alphanumeric() || c == '_'
+}
+
 pub fn tokenize(input: &str) -> Result<Vec<Token>, String> {
     let mut tokens = Vec::new();
     let mut chars = input.chars().peekable();
@@ -49,7 +53,7 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, String> {
             'a'..='z' | 'A'..='Z' => {
                 let ident: String = chars
                     .by_ref()
-                    .peeking_take_while(|&ch| ch.is_ascii_alphanumeric())
+                    .peeking_take_while(|&ch| is_valid_identifier_char(ch))
                     .collect();
 
                 match ident.as_str() {

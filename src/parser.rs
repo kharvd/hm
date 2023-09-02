@@ -281,13 +281,7 @@ fn parse_non_ap_expr(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Resu
         Some(Token::Keyword(Keyword::Fun)) => parse_lambda_expr(tokens)?,
         Some(Token::Keyword(Keyword::Let)) => parse_let_expr(tokens)?,
         Some(Token::Keyword(Keyword::Match)) => parse_match_expr(tokens)?,
-        Some(Token::LParen) => {
-            let expr = parse_expr(tokens)?;
-            match tokens.next() {
-                Some(Token::RParen) => expr,
-                _ => return Err("Expected closing parenthesis".to_string()),
-            }
-        }
+        Some(Token::LParen) => parse_parenthesized_expr(tokens)?,
         Some(Token::LBracket) => parse_list(tokens)?,
         t => return Err(format!("Expected expression, got {:?}", t)),
     };
@@ -295,11 +289,62 @@ fn parse_non_ap_expr(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Resu
     Ok(expr)
 }
 
+fn parse_parenthesized_expr(
+    tokens: &mut Peekable<impl Iterator<Item = Token>>,
+) -> Result<Expr, String> {
+    match tokens.peek() {
+        Some(Token::RParen) => {
+            tokens.next();
+            Ok(Expr::Ident("Unit".to_string()))
+        }
+        _ => {
+            let expr = parse_expr(tokens)?;
+            Ok(match tokens.next() {
+                Some(Token::RParen) => expr,
+                Some(Token::Comma) => parse_tuple(tokens, expr)?,
+                _ => return Err("Expected closing parenthesis".to_string()),
+            })
+        }
+    }
+}
+
+fn parse_tuple(
+    tokens: &mut Peekable<impl Iterator<Item = Token>>,
+    first: Expr,
+) -> Result<Expr, String> {
+    let mut exprs = vec![first];
+    exprs.append(&mut parse_comma_exprs(tokens)?);
+
+    let tuple = Expr::Ident(format!("Tuple{}", exprs.len()));
+    let tuple = exprs
+        .into_iter()
+        .fold(tuple, |acc, expr| Expr::Ap(Rc::new(acc), Rc::new(expr)));
+
+    Ok(tuple)
+}
+
 fn parse_list(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<Expr, String> {
+    let exprs = parse_comma_exprs(tokens)?;
+    let mut list = Expr::Ident("Nil".to_string());
+    for expr in exprs.into_iter().rev() {
+        list = Expr::Ap(
+            Rc::new(Expr::Ap(
+                Rc::new(Expr::Ident("Cons".to_string())),
+                Rc::new(expr),
+            )),
+            Rc::new(list),
+        );
+    }
+    Ok(list)
+}
+
+fn parse_comma_exprs(
+    tokens: &mut Peekable<impl Iterator<Item = Token>>,
+) -> Result<Vec<Expr>, String> {
     let mut exprs = Vec::new();
     loop {
         match tokens.peek() {
-            Some(Token::RBracket) => {
+            Some(Token::RParen) | Some(Token::RBracket) => {
                 tokens.next();
                 break;
             }
@@ -308,18 +353,11 @@ fn parse_list(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<Expr
             }
             _ => {
                 let expr = parse_expr(tokens)?;
-                exprs.push(Rc::new(expr));
+                exprs.push(expr);
             }
         }
     }
-    let mut list = Expr::Ident("Nil".to_string());
-    for expr in exprs.into_iter().rev() {
-        list = Expr::Ap(
-            Rc::new(Expr::Ap(Rc::new(Expr::Ident("Cons".to_string())), expr)),
-            Rc::new(list),
-        );
-    }
-    Ok(list)
+    Ok(exprs)
 }
 
 fn parse_lambda_expr(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<Expr, String> {
@@ -447,17 +485,67 @@ fn parse_non_constructor_pattern(
         Some(Token::Int(i)) => ExprPattern::Int(i),
         Some(Token::Keyword(Keyword::True)) => ExprPattern::Bool(true),
         Some(Token::Keyword(Keyword::False)) => ExprPattern::Bool(false),
-        Some(Token::LParen) => {
-            let pat = parse_pattern(tokens)?;
-            match tokens.next() {
-                Some(Token::RParen) => pat,
-                _ => return Err("Expected closing parenthesis".to_string()),
-            }
-        }
+        Some(Token::LParen) => parse_parenthesized_pattern(tokens)?,
         t => return Err(format!("Expected pattern, got {:?}", t)),
     };
 
     Ok(pat)
+}
+
+fn parse_parenthesized_pattern(
+    tokens: &mut Peekable<impl Iterator<Item = Token>>,
+) -> Result<ExprPattern, String> {
+    match tokens.peek() {
+        Some(Token::RParen) => {
+            tokens.next();
+            Ok(ExprPattern::Constructor("Unit".to_string(), vec![]))
+        }
+        _ => {
+            let pat = parse_pattern(tokens)?;
+            Ok(match tokens.next() {
+                Some(Token::RParen) => pat,
+                Some(Token::Comma) => parse_tuple_pattern(tokens, pat)?,
+                _ => return Err("Expected closing parenthesis".to_string()),
+            })
+        }
+    }
+}
+
+fn parse_tuple_pattern(
+    tokens: &mut Peekable<impl Iterator<Item = Token>>,
+    first: ExprPattern,
+) -> Result<ExprPattern, String> {
+    let mut pats = vec![first];
+    pats.append(&mut parse_comma_patterns(tokens)?);
+
+    let tuple = ExprPattern::Constructor(
+        format!("Tuple{}", pats.len()),
+        pats.into_iter().map(Rc::new).collect(),
+    );
+
+    Ok(tuple)
+}
+
+fn parse_comma_patterns(
+    tokens: &mut Peekable<impl Iterator<Item = Token>>,
+) -> Result<Vec<ExprPattern>, String> {
+    let mut pats = Vec::new();
+    loop {
+        match tokens.peek() {
+            Some(Token::RParen) => {
+                tokens.next();
+                break;
+            }
+            Some(Token::Comma) => {
+                tokens.next();
+            }
+            _ => {
+                let pat = parse_pattern(tokens)?;
+                pats.push(pat);
+            }
+        }
+    }
+    Ok(pats)
 }
 
 #[cfg(test)]
@@ -687,6 +775,48 @@ mod tests {
                     )
                 ]
             ))
+        );
+    }
+
+    #[test]
+    fn test_parse_list() {
+        let tokens = lexer::tokenize("[1, 2, 3]").unwrap();
+        let mut iter = tokens.into_iter().peekable();
+
+        assert_eq!(
+            parse_expr(&mut iter),
+            Ok(e_ap!(
+                e_ap!(e_ident!("Cons"), e_int!(1)),
+                e_ap!(
+                    e_ap!(e_ident!("Cons"), e_int!(2)),
+                    e_ap!(e_ap!(e_ident!("Cons"), e_int!(3)), e_ident!("Nil"))
+                )
+            ))
+        );
+    }
+
+    #[test]
+    fn test_parse_tuple() {
+        let tokens = lexer::tokenize("(1, 2, 3)").unwrap();
+        let mut iter = tokens.into_iter().peekable();
+
+        assert_eq!(
+            parse_expr(&mut iter),
+            Ok(e_ap!(
+                e_ap!(e_ap!(e_ident!("Tuple3"), e_int!(1)), e_int!(2)),
+                e_int!(3)
+            ))
+        );
+    }
+
+    #[test]
+    fn test_pattern_tuple() {
+        let tokens = lexer::tokenize("(1, 2, 3)").unwrap();
+        let mut iter = tokens.into_iter().peekable();
+
+        assert_eq!(
+            parse_pattern(&mut iter),
+            Ok(p_constructor!("Tuple3", p_int!(1), p_int!(2), p_int!(3)))
         );
     }
 }

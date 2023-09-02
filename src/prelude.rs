@@ -40,9 +40,25 @@ impl Env {
             val fix : ('a -> 'a) -> 'a
             let eq = fun x -> fun y -> and (leq x y) (geq x y)
                 
-            data Pair 'a 'b = Pair 'a 'b
-            let fst = fun p -> match p with | Pair x y -> x
-            let snd = fun p -> match p with | Pair x y -> y
+            data Unit = Unit
+            data Tuple1 'a = Tuple1 'a
+            data Tuple2 'a 'b = Tuple2 'a 'b
+            data Tuple3 'a 'b 'c = Tuple3 'a 'b 'c
+            data Tuple4 'a 'b 'c 'd = Tuple4 'a 'b 'c 'd
+            data Tuple5 'a 'b 'c 'd 'e = Tuple5 'a 'b 'c 'd 'e
+            data Tuple6 'a 'b 'c 'd 'e 'f = Tuple6 'a 'b 'c 'd 'e 'f
+            data Tuple7 'a 'b 'c 'd 'e 'f 'g = Tuple7 'a 'b 'c 'd 'e 'f 'g
+            data Tuple8 'a 'b 'c 'd 'e 'f 'g 'h = Tuple8 'a 'b 'c 'd 'e 'f 'g 'h
+            data Tuple9 'a 'b 'c 'd 'e 'f 'g 'h 'i = Tuple9 'a 'b 'c 'd 'e 'f 'g 'h 'i
+            data Tuple10 'a 'b 'c 'd 'e 'f 'g 'h 'i 'j = Tuple10 'a 'b 'c 'd 'e 'f 'g 'h 'i 'j
+
+            let fst = fun p -> 
+                match p with 
+                | (x, _) -> x
+
+            let snd = fun p -> 
+                match p with
+                | (_, y) -> y
 
             data List 'a = Nil | Cons 'a (List 'a)
             let nil = Nil
@@ -102,7 +118,13 @@ impl Env {
             let tail = fun xs ->
                 match xs with
                 | Nil -> Nil
-                | Cons x rest -> rest
+                | Cons x rest -> rest 
+            
+            let rec list_eq = fun xs -> fun ys ->
+                match (xs, ys) with
+                | (Nil, Nil) -> true
+                | (Cons x xs, Cons y ys) -> and (eq x y) (list_eq xs ys)
+                | _ -> false
         ";
 
         env.eval_file(prelude_source).unwrap()
