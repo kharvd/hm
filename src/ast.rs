@@ -1,7 +1,7 @@
 use std::{fmt::Display, rc::Rc};
 
 use itertools::Itertools;
-use rpds::RedBlackTreeSet;
+use rpds::{List, RedBlackTreeSet};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum ExprPattern {
@@ -146,6 +146,16 @@ impl TypeExpr {
         match self {
             TypeExpr::Forall(_, _) => true,
             _ => false,
+        }
+    }
+
+    pub fn as_function_type(&self) -> (List<Rc<TypeExpr>>, TypeExpr) {
+        match self {
+            TypeExpr::Fun(param, body) => {
+                let (params, return_type) = body.as_function_type();
+                (params.push_front(param.clone()), return_type)
+            }
+            _ => (List::new(), self.clone()),
         }
     }
 }

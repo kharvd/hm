@@ -3,7 +3,7 @@ use std::fmt::Display;
 use rpds::RedBlackTreeSet;
 
 use crate::{
-    ast::{Expr, TypeExpr},
+    ast::{Expr, ExprPattern, TypeExpr},
     env::Env,
 };
 
@@ -164,12 +164,115 @@ fn infer_constraints_inner(
                 constraints: new_constraints,
             }
         }
-        Expr::Match(_, _) => {
-            // todo!()
+        Expr::Match(expr, patterns) => {
             let type_var = allocate_type_var(type_var_counter);
+            let mut infer_expr = infer_constraints_inner(env, expr, type_var_counter)?;
+
+            let mut new_constraints = Vec::new();
+            new_constraints.append(&mut infer_expr.constraints);
+
+            for (pattern, body) in patterns.iter() {
+                let mut infer_pattern =
+                    infer_constraints_for_pattern(env, pattern, type_var_counter)?;
+                let env_with_bindings = infer_pattern
+                    .bindings
+                    .iter()
+                    .fold(env.clone(), |acc, (name, ty)| {
+                        acc.extend_type(name, ty.clone())
+                    });
+                let mut infer_body =
+                    infer_constraints_inner(&env_with_bindings, body, type_var_counter)?;
+
+                new_constraints.append(&mut infer_pattern.inference.constraints);
+                new_constraints.append(&mut infer_body.constraints);
+                new_constraints.push(Constraint::new(
+                    infer_expr.inferred_type.clone(),
+                    infer_pattern.inference.inferred_type.clone(),
+                ));
+                new_constraints.push(Constraint::new(
+                    infer_body.inferred_type.clone(),
+                    type_var.clone(),
+                ));
+            }
+
             Inference {
                 inferred_type: type_var,
+                constraints: new_constraints,
+            }
+        }
+    })
+}
+
+struct PatternBindings {
+    inference: Inference,
+    bindings: Vec<(String, TypeExpr)>,
+}
+
+fn infer_constraints_for_pattern(
+    env: &Env,
+    pattern: &ExprPattern,
+    type_var_counter: &mut u64,
+) -> Result<PatternBindings, String> {
+    Ok(match pattern {
+        ExprPattern::Int(_) => PatternBindings {
+            inference: Inference {
+                inferred_type: TypeExpr::Int,
                 constraints: Vec::new(),
+            },
+            bindings: Vec::new(),
+        },
+        ExprPattern::Bool(_) => PatternBindings {
+            inference: Inference {
+                inferred_type: TypeExpr::Bool,
+                constraints: Vec::new(),
+            },
+            bindings: Vec::new(),
+        },
+        ExprPattern::Wildcard => {
+            let type_var = allocate_type_var(type_var_counter);
+            PatternBindings {
+                inference: Inference {
+                    inferred_type: type_var.clone(),
+                    constraints: Vec::new(),
+                },
+                bindings: Vec::new(),
+            }
+        }
+        ExprPattern::Variable(name) => {
+            let type_var = allocate_type_var(type_var_counter);
+            PatternBindings {
+                inference: Inference {
+                    inferred_type: type_var.clone(),
+                    constraints: Vec::new(),
+                },
+                bindings: vec![(name.clone(), type_var)],
+            }
+        }
+        ExprPattern::Constructor(name, args) => {
+            let constructor_type = env.resolve_type(name)?;
+            let instantiated_constructor_type = instantiate(&constructor_type, type_var_counter);
+            let (constructor_args, constructor_return_type) =
+                instantiated_constructor_type.as_function_type();
+
+            let mut new_constraints = Vec::new();
+            let mut bindings = Vec::new();
+            for (arg, pattern_arg) in constructor_args.iter().zip(args.iter()) {
+                let mut infer_arg =
+                    infer_constraints_for_pattern(env, pattern_arg, type_var_counter)?;
+                new_constraints.append(&mut infer_arg.inference.constraints);
+                new_constraints.push(Constraint::new(
+                    (**arg).clone(),
+                    infer_arg.inference.inferred_type,
+                ));
+                bindings.append(&mut infer_arg.bindings);
+            }
+
+            PatternBindings {
+                inference: Inference {
+                    inferred_type: constructor_return_type,
+                    constraints: new_constraints,
+                },
+                bindings,
             }
         }
     })
@@ -429,89 +532,78 @@ mod tests {
         }
     }
 
-    fn parse_type_expr(s: &str) -> TypeExpr {
+    fn parse_type_expr(s: &str) -> Result<TypeExpr, String> {
         let tokens = tokenize(s).unwrap();
         let mut iter = tokens.into_iter().peekable();
-        crate::parser::parse_type_expr(&mut iter).unwrap()
+        crate::parser::parse_type_expr(&mut iter)
     }
 
     fn infer_type(env: &Env, s: &str) -> Result<TypeExpr, String> {
         infer(env, &parse_expr(s))
     }
 
+    macro_rules! assert_type {
+        ($env:expr, $s:expr, $expected:expr) => {
+            assert_eq!(
+                infer_type($env, $s).unwrap(),
+                parse_type_expr($expected).unwrap()
+            )
+        };
+    }
+
+    macro_rules! assert_type_error {
+        ($env:expr, $s:expr, $expected:expr) => {
+            assert_eq!(infer_type($env, $s), Err($expected.to_string()))
+        };
+    }
+
     #[test]
     fn test_simple() {
         let env = Env::prelude();
-        assert_eq!(infer_type(&env, "5").unwrap(), TypeExpr::Int);
-        assert_eq!(infer_type(&env, "true").unwrap(), TypeExpr::Bool);
-        assert_eq!(
-            infer_type(&env, "fun x -> plus x 1").unwrap(),
-            parse_type_expr("int -> int")
-        );
+        assert_type!(&env, "5", "int");
+        assert_type!(&env, "true", "bool");
+        assert_type!(&env, "fun x -> plus x 1", "int -> int");
+        assert_type!(&env, "fun x -> plus x", "int -> int -> int");
     }
 
     #[test]
     fn test_polymorphic() {
         let mut env = Env::prelude();
-        env = env
-            .eval_statement(&parse_statement("let id = fun x -> x").unwrap())
-            .unwrap()
-            .new_env;
+        env = env.eval_file("let id = fun x -> x").unwrap();
 
-        assert_eq!(
-            infer_type(&env, "id").unwrap(),
-            parse_type_expr("forall 'a. 'a -> 'a")
-        );
-        assert_eq!(infer_type(&env, "id 5").unwrap(), TypeExpr::Int);
-        assert_eq!(
-            infer_type(&env, "id neg").unwrap(),
-            parse_type_expr("int -> int")
-        );
-        assert_eq!(
-            infer_type(&env, "fun x -> id x").unwrap(),
-            parse_type_expr("forall 'a. 'a -> 'a")
-        );
-        assert_eq!(
-            infer_type(&env, "fun x -> id (id x)").unwrap(),
-            parse_type_expr("forall 'a. 'a -> 'a")
-        )
+        assert_type!(&env, "id", "forall 'a. 'a -> 'a");
+        assert_type!(&env, "id 5", "int");
+        assert_type!(&env, "id neg", "int -> int");
+        assert_type!(&env, "fun x -> id x", "forall 'a. 'a -> 'a");
+        assert_type!(&env, "fun x -> id (id x)", "forall 'a. 'a -> 'a");
     }
 
     #[test]
     fn test_if() {
         let env = Env::prelude();
-        assert_eq!(
-            infer_type(&env, "fun x -> if x then 1 else 2").unwrap(),
-            parse_type_expr("bool -> int")
+        assert_type!(&env, "fun x -> if x then 1 else 2", "bool -> int");
+        assert_type_error!(
+            &env,
+            "fun x -> if x then 1 else true",
+            "Failed to unify constraint bool = int"
         );
-        assert_eq!(
-            infer_type(&env, "fun x -> if x then 1 else true"),
-            Err("Failed to unify constraint bool = int".to_string())
-        );
-        assert_eq!(
-            infer_type(&env, "fun x -> if x then 1 else neg"),
-            Err("Failed to unify constraint int = (int -> int)".to_string())
+        assert_type_error!(
+            &env,
+            "fun x -> if x then 1 else neg",
+            "Failed to unify constraint int = (int -> int)"
         );
     }
 
     #[test]
     fn test_let() {
         let env = Env::prelude();
-        assert_eq!(
-            infer_type(&env, "(let f = fun x -> x in f)").unwrap(),
-            parse_type_expr("forall 'a. 'a -> 'a")
-        );
-        assert_eq!(
-            infer_type(&env, "(let f = fun x -> x in f 5)").unwrap(),
-            TypeExpr::Int
-        );
-        assert_eq!(
-            infer_type(&env, "(let f = fun x -> x in f neg)").unwrap(),
-            parse_type_expr("int -> int")
-        );
-        assert_eq!(
-            infer_type(&env, "(let id = fun x -> x in (let a = id 0 in id true))").unwrap(),
-            TypeExpr::Bool
+        assert_type!(&env, "(let f = fun x -> x in f)", "forall 'a. 'a -> 'a");
+        assert_type!(&env, "(let f = fun x -> x in f 5)", "int");
+        assert_type!(&env, "(let f = fun x -> x in f neg)", "int -> int");
+        assert_type!(
+            &env,
+            "(let id = fun x -> x in (let a = id 0 in id true))",
+            "bool"
         );
     }
 
@@ -519,17 +611,12 @@ mod tests {
     fn test_fun() {
         let env = Env::prelude();
 
-        assert_eq!(
-            infer_type(&env, "fun x -> fun y -> x").unwrap(),
-            parse_type_expr("forall 'a 'b. 'a -> 'b -> 'a")
-        );
-        assert_eq!(
-            infer_type(&env, "fun x -> fun y -> y").unwrap(),
-            parse_type_expr("forall 'a 'b. 'a -> 'b -> 'b")
-        );
-        assert_eq!(
-            infer_type(&env, "(let g = fun x -> fun y -> fun z -> y in g 1)").unwrap(),
-            parse_type_expr("forall 'a 'b. 'a -> 'b -> 'a")
+        assert_type!(&env, "fun x -> fun y -> x", "forall 'a 'b. 'a -> 'b -> 'a");
+        assert_type!(&env, "fun x -> fun y -> y", "forall 'a 'b. 'a -> 'b -> 'b");
+        assert_type!(
+            &env,
+            "(let g = fun x -> fun y -> fun z -> y in g 1)",
+            "forall 'a 'b. 'a -> 'b -> 'a"
         );
     }
 
@@ -537,87 +624,123 @@ mod tests {
     fn test_data() {
         let mut env = Env::prelude();
         env = env
-            .eval_statement(&parse_statement("data Sign = Negative | Zero | Positive").unwrap())
-            .unwrap()
-            .new_env;
-
-        assert_eq!(
-            infer_type(&env, "Negative").unwrap(),
-            parse_type_expr("Sign")
+            .eval_file("data Sign = Negative | Zero | Positive")
+            .unwrap();
+        assert_type!(&env, "Negative", "Sign");
+        assert_type!(&env, "Zero", "Sign");
+        assert_type!(&env, "Positive", "Sign");
+        assert_type!(
+            &env,
+            "fun x -> if lt x 0 then Negative else if gt x 0 then Positive else Zero",
+            "int -> Sign"
         );
-        assert_eq!(infer_type(&env, "Zero").unwrap(), parse_type_expr("Sign"));
-        assert_eq!(
-            infer_type(&env, "Positive").unwrap(),
-            parse_type_expr("Sign")
-        );
-
-        assert_eq!(
-            infer_type(
-                &env,
-                "fun x -> if lt x 0 then Negative else if gt x 0 then Positive else Zero"
-            )
-            .unwrap(),
-            parse_type_expr("int -> Sign")
-        )
     }
 
     #[test]
     fn test_parameterized_data() {
         let mut env = Env::prelude();
-        env = env
-            .eval_statement(&parse_statement("data Maybe 'a = Nothing | Just 'a").unwrap())
-            .unwrap()
-            .new_env;
+        env = env.eval_file("data Maybe 'a = Nothing | Just 'a").unwrap();
 
-        assert_eq!(
-            infer_type(&env, "Nothing").unwrap(),
-            parse_type_expr("forall 'a. Maybe 'a")
+        assert_type!(&env, "Nothing", "forall 'a. Maybe 'a");
+        assert_type!(&env, "Just 5", "Maybe int");
+        assert_type!(&env, "Just true", "Maybe bool");
+        assert_type!(&env, "fun x -> Just x", "forall 'a. 'a -> Maybe 'a");
+        assert_type!(
+            &env,
+            "fun x -> Just (Just x)",
+            "forall 'a. 'a -> Maybe (Maybe 'a)"
         );
-        assert_eq!(
-            infer_type(&env, "Just 5").unwrap(),
-            parse_type_expr("Maybe int")
-        );
-        assert_eq!(
-            infer_type(&env, "Just true").unwrap(),
-            parse_type_expr("Maybe bool")
-        );
-        assert_eq!(
-            infer_type(&env, "fun x -> Just x").unwrap(),
-            parse_type_expr("forall 'a. 'a -> Maybe 'a")
-        );
-        assert_eq!(
-            infer_type(&env, "fun x -> Just (Just x)").unwrap(),
-            parse_type_expr("forall 'a. 'a -> Maybe (Maybe 'a)")
-        );
-        assert_eq!(
-            infer_type(&env, "fun x -> Just (Just (Just x))").unwrap(),
-            parse_type_expr("forall 'a. 'a -> Maybe (Maybe (Maybe 'a))")
+        assert_type!(
+            &env,
+            "fun x -> Just (Just (Just x))",
+            "forall 'a. 'a -> Maybe (Maybe (Maybe 'a))"
         );
     }
 
     #[test]
     fn test_pair() {
         let mut env = Env::prelude();
-        env = env
-            .eval_statement(&parse_statement("data Pair 'a 'b = Pair 'a 'b").unwrap())
-            .unwrap()
-            .new_env;
+        env = env.eval_file("data Pair 'a 'b = Pair 'a 'b").unwrap();
 
-        assert_eq!(
-            infer_type(&env, "Pair 5 true").unwrap(),
-            parse_type_expr("Pair int bool")
+        assert_type!(&env, "Pair 5 true", "Pair int bool");
+        assert_type!(&env, "fun x -> Pair x 5", "forall 'a. 'a -> Pair 'a int");
+        assert_type!(
+            &env,
+            "fun x -> Pair x true",
+            "forall 'a. 'a -> Pair 'a bool"
         );
-        assert_eq!(
-            infer_type(&env, "fun x -> Pair x 5").unwrap(),
-            parse_type_expr("forall 'a. 'a -> Pair 'a int")
+        assert_type!(
+            &env,
+            "fun x -> fun y -> Pair y (Pair x true)",
+            "forall 'a 'b. 'a -> 'b -> Pair 'b (Pair 'a bool)"
         );
-        assert_eq!(
-            infer_type(&env, "fun x -> Pair x true").unwrap(),
-            parse_type_expr("forall 'a. 'a -> Pair 'a bool")
+    }
+
+    #[test]
+    fn test_match_constant() {
+        let mut env = Env::prelude();
+        env = env
+            .eval_file(
+                "
+            data Sign = Negative | Zero | Positive
+            data Maybe 'a = Nothing | Just 'a
+            ",
+            )
+            .unwrap();
+
+        assert_type!(
+            &env,
+            "fun x -> match x with | Negative -> 0 | Zero -> 1 | Positive -> 2",
+            "Sign -> int"
         );
-        assert_eq!(
-            infer_type(&env, "fun x -> fun y -> Pair y (Pair x true)").unwrap(),
-            parse_type_expr("forall 'a 'b. 'a -> 'b -> Pair 'b (Pair 'a bool)")
+        assert_type_error!(
+            &env,
+            "fun x -> match x with | Negative -> 0 | Zero -> true | Positive -> 2",
+            "Failed to unify constraint bool = int"
+        );
+        assert_type_error!(
+            &env,
+            "fun x -> match x with | Negative -> 0 | Nothing -> 1",
+            "Failed to unify constraint (Maybe 't3) = Sign"
+        )
+    }
+
+    #[test]
+    fn test_match_args() {
+        let mut env = Env::prelude();
+        env = env.eval_file("data Maybe 'a = Nothing | Just 'a").unwrap();
+
+        assert_type!(
+            &env,
+            "fun x -> match x with | Nothing -> 0 | Just y -> 1",
+            "forall 'a. Maybe 'a -> int"
+        );
+        assert_type!(
+            &env,
+            "fun x -> match x with | Nothing -> 0 | Just 1 -> 1",
+            "Maybe int -> int"
+        );
+        assert_type!(
+            &env,
+            "fun f -> fun x -> match x with | Nothing -> Nothing | Just y -> Just (f y)",
+            "forall 'a 'b. ('a -> 'b) -> Maybe 'a -> Maybe 'b"
+        );
+    }
+
+    #[test]
+    fn test_match_nested() {
+        let mut env = Env::prelude();
+        env = env.eval_file("data Maybe 'a = Nothing | Just 'a").unwrap();
+
+        assert_type!(
+            &env,
+            "fun x -> match x with | Nothing -> 0 | Just Nothing -> 1 | Just (Just y) -> 2",
+            "forall 'a. Maybe (Maybe 'a) -> int"
+        );
+        assert_type!(
+            &env,
+            "fun f -> fun x -> match x with | Nothing -> Nothing | Just Nothing -> Just Nothing | Just (Just y) -> Just (Just (f y))",
+            "forall 'a 'b. ('b -> 'a) -> Maybe (Maybe 'b) -> Maybe (Maybe 'a)"
         );
     }
 }

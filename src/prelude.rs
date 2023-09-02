@@ -1,13 +1,12 @@
 use crate::{
     builtins::{BoolBinOps, BoolUnaryOps, IntBinOps, IntUnaryOps},
     env::Env,
-    parser::parse_statement,
     value::Value,
 };
 
 impl Env {
     pub fn prelude() -> Env {
-        let mut env = Env::new()
+        let env = Env::new()
             .extend("plus", Value::new_builtin(IntBinOps::Plus))
             .extend("minus", Value::new_builtin(IntBinOps::Minus))
             .extend("mult", Value::new_builtin(IntBinOps::Mult))
