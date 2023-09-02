@@ -45,8 +45,11 @@ impl Statement {
                     .extend(&name, value.clone())
             }
             Statement::LetRec(name, expr) => {
-                let binding = Expr::ap(Expr::ident("fix"), Expr::lambda(name, (**expr).clone()));
-                Statement::let_(name, binding).eval(env)?
+                let binding = Expr::Ap(
+                    Rc::new(Expr::Ident(String::from("fix"))),
+                    Rc::new(Expr::Lambda(name.clone(), expr.clone())),
+                );
+                Statement::Let(name.clone(), Rc::new(binding)).eval(env)?
             }
             Statement::Val(name, type_expr) => {
                 let generalized_type_expr = match type_expr.borrow() {
@@ -217,7 +220,8 @@ mod tests {
     use std::rc::Rc;
 
     use crate::{
-        ast::{Expr, Statement},
+        ast::Expr,
+        e_ident,
         eval::{Env, Value},
         parser,
     };
@@ -229,123 +233,121 @@ mod tests {
         }
     }
 
-    fn parse_statement(s: &str) -> Statement {
-        parser::parse_statement(s).unwrap()
+    fn basic_env() -> Env {
+        Env::prelude()
     }
 
-    fn eval(s: &str) -> Value {
-        eval_env(Env::new(), s)
+    fn eval_file(file: &str) -> Env {
+        basic_env().eval_file(file).unwrap()
     }
 
-    fn eval_env(env: Env, s: &str) -> Value {
+    fn eval_env(env: &Env, s: &str) -> Value {
         env.eval_expr(&parse_expr(s)).unwrap()
     }
 
-    fn eval_statements(env: Env, statements: Vec<&str>) -> Env {
-        statements.iter().fold(env, |env, s| {
-            env.eval_statement(&parse_statement(s)).unwrap().new_env
-        })
+    macro_rules! assert_same_value {
+        ($env:expr, $left:expr, $right:expr) => {
+            assert_eq!(eval_env(&$env, $left), eval_env(&$env, $right))
+        };
     }
 
     #[test]
     fn eval_expr_simple() {
-        assert_eq!(eval("123"), Value::Int(123));
-        assert_eq!(eval("true"), Value::Bool(true));
+        let env = eval_file(
+            "data Sign = Negative | Zero | Positive
+            let a = 1",
+        );
+        assert_eq!(eval_env(&env, "123"), Value::Int(123));
+        assert_eq!(eval_env(&env, "true"), Value::Bool(true));
         assert_eq!(
-            eval("fun x -> x"),
+            eval_env(&env, "fun x -> x"),
             Value::Func {
                 param: "x".to_string(),
-                body: Rc::new(Expr::ident("x")),
-                closure: Env::new(),
+                body: Rc::new(e_ident!("x")),
+                closure: env.clone(),
             }
+        );
+        assert_eq!(eval_env(&env, "a"), Value::Int(1));
+        assert_eq!(
+            eval_env(&env, "Negative"),
+            Value::Data("Negative".to_string(), vec![])
         );
     }
 
     #[test]
     fn eval_apply() {
-        let env = eval_statements(Env::new(), vec!["let f = fun x -> if x then 5 else 10"]);
-        assert_eq!(eval_env(env.clone(), "f true"), Value::Int(5));
-        assert_eq!(eval_env(env.clone(), "f false"), Value::Int(10));
+        let env = eval_file("let f = fun x -> if x then 5 else 10");
+        assert_same_value!(env, "f true", "5");
+        assert_same_value!(env, "f false", "10");
     }
 
     #[test]
     fn eval_int() {
-        let env = eval_statements(
-            Env::prelude(),
-            vec!["let x = 1", "let y = 42", "let z = plus x y"],
+        let env = eval_file(
+            "let x = 1
+            let y = 42
+            let z = plus x y",
         );
-        assert_eq!(eval_env(env.clone(), "z"), Value::Int(43))
+        assert_same_value!(env, "z", "43");
     }
 
     #[test]
     fn eval_rec() {
-        let env = eval_statements(Env::prelude(), vec![
-            "let rec fact = fun n -> if eq n 0 then 1 else mult n (fact (minus n 1))",
-            "let rec fib = fun n -> if or (eq n 0) (eq n 1) then 1 else plus (fib (minus n 1)) (fib (minus n 2))",
-        ]);
+        let env = eval_file(
+            "let rec fact = fun n -> if eq n 0 then 1 else mult n (fact (minus n 1))
+            let rec fib = fun n -> if or (eq n 0) (eq n 1) then 1 else plus (fib (minus n 1)) (fib (minus n 2))",
+        );
 
-        assert_eq!(eval_env(env.clone(), "fact 5"), Value::Int(120));
-        assert_eq!(eval_env(env.clone(), "fib 8"), Value::Int(34));
+        assert_same_value!(env, "fact 5", "120");
+        assert_same_value!(env, "fib 8", "34");
     }
 
     #[test]
     fn eval_let_expr() {
-        let env = eval_statements(
-            Env::prelude(),
-            vec!["let x = 1", "let y = let x = plus x 1 in x"],
+        let env = eval_file(
+            "let x = 1
+            let y = let x = plus x 1 in x",
         );
-        assert_eq!(eval_env(env.clone(), "y"), Value::Int(2));
+        assert_same_value!(env, "y", "2");
     }
 
     #[test]
     fn eval_data_simple() {
-        let env = eval_statements(
-            Env::prelude(),
-            vec![
-                "data Sign = Negative | Zero | Positive",
-                "let f = fun x -> if lt x 0 then Negative else if gt x 0 then Positive else Zero",
-            ],
+        let env = eval_file(
+            "data Sign = Negative | Zero | Positive
+            let f = fun x -> if lt x 0 then Negative else if gt x 0 then Positive else Zero",
         );
 
         assert_eq!(
-            eval_env(env.clone(), "f 5"),
+            eval_env(&env, "f 5"),
             Value::Data("Positive".to_string(), vec![])
         );
         assert_eq!(
-            eval_env(env.clone(), "f 0"),
+            eval_env(&env, "f 0"),
             Value::Data("Zero".to_string(), vec![])
         );
         assert_eq!(
-            eval_env(env.clone(), "f (neg 5)"),
+            eval_env(&env, "f (neg 5)"),
             Value::Data("Negative".to_string(), vec![])
         );
     }
 
     #[test]
     fn eval_parameterized_data() {
-        let env = eval_statements(
-            Env::prelude(),
-            vec![
-                "data List 'a = Nil | Cons 'a (List 'a)",
-                "let l = Cons 1 (Cons 2 (Cons 3 Nil))",
-            ],
+        let env = eval_file(
+            "data List 'a = Nil | Cons 'a (List 'a)
+            let l = Cons 1 (Cons 2 Nil)",
         );
 
         assert_eq!(
-            eval_env(env.clone(), "l"),
+            eval_env(&env, "l"),
             Value::Data(
                 "Cons".to_string(),
                 vec![
                     Value::Int(1),
                     Value::Data(
                         "Cons".to_string(),
-                        vec![
-                            Value::Int(2),
-                            Value::Data(
-                                "Cons".to_string(),
-                                vec![Value::Int(3), Value::Data("Nil".to_string(), vec![])]
-                            )
-                        ]
+                        vec![Value::Int(2), Value::Data("Nil".to_string(), vec![])]
                     )
                 ]
             )
@@ -354,56 +356,43 @@ mod tests {
 
     #[test]
     fn match_constant() {
-        let env = eval_statements(
-            Env::prelude(),
-            vec![
-                "data Sign = Negative | Zero | Positive",
-                "let f = fun x ->
-                   match x with
-                     | Negative -> 0
-                     | Zero -> 1
-                     | Positive -> 2",
-            ],
+        let env = eval_file(
+            "data Sign = Negative | Zero | Positive
+            let f = fun x ->
+                match x with
+                | Negative -> 0
+                | Zero -> 1
+                | Positive -> 2",
         );
 
-        assert_eq!(eval_env(env.clone(), "f Negative"), Value::Int(0));
-        assert_eq!(eval_env(env.clone(), "f Zero"), Value::Int(1));
-        assert_eq!(eval_env(env.clone(), "f Positive"), Value::Int(2));
+        assert_same_value!(env, "f Negative", "0");
+        assert_same_value!(env, "f Zero", "1");
+        assert_same_value!(env, "f Positive", "2");
     }
 
     #[test]
     fn match_pair() {
-        let env = eval_statements(
-            Env::prelude(),
-            vec![
-                "data Pair 'a 'b = Pair 'a 'b",
-                "let f = fun x ->
-                   match x with
-                     | Pair a b -> plus a b",
-            ],
+        let env = eval_file(
+            "data Pair 'a 'b = Pair 'a 'b
+            let f = fun x ->
+                match x with
+                | Pair a b -> plus a b",
         );
 
-        assert_eq!(eval_env(env.clone(), "f (Pair 1 2)"), Value::Int(3));
+        assert_same_value!(env, "f (Pair 1 2)", "3");
     }
 
     #[test]
     fn match_list() {
-        let env = eval_statements(
-            Env::prelude(),
-            vec![
-                "data List 'a = Nil | Cons 'a (List 'a)",
-                "let rec len = fun l ->
-                   match l with
-                     | Nil -> 0
-                     | Cons _ xs -> plus 1 (len xs)",
-            ],
+        let env = eval_file(
+            "data List 'a = Nil | Cons 'a (List 'a)
+            let rec len = fun l ->
+                match l with
+                | Nil -> 0
+                | Cons _ xs -> plus 1 (len xs)",
         );
 
-        assert_eq!(
-            eval_env(env.clone(), "len (Cons 1 (Cons 2 (Cons 3 Nil)))"),
-            Value::Int(3)
-        );
-
-        assert_eq!(eval_env(env.clone(), "len Nil"), Value::Int(0));
+        assert_same_value!(env, "len (Cons 1 (Cons 2 (Cons 3 Nil)))", "3");
+        assert_same_value!(env, "len Nil", "0");
     }
 }

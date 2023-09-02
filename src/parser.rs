@@ -19,17 +19,11 @@ pub fn parse(s: &str) -> Result<ParseResult, String> {
         Some(token) => Ok(match token {
             Token::Keyword(Keyword::Let)
             | Token::Keyword(Keyword::Val)
-            | Token::Keyword(Keyword::Data) => ParseResult::Statement(parse_stmt(&mut iter)?),
+            | Token::Keyword(Keyword::Data) => ParseResult::Statement(parse_statement(&mut iter)?),
             _ => ParseResult::Expression(parse_expr(&mut iter)?),
         }),
         None => Err("Empty input".to_string()),
     }
-}
-
-pub fn parse_statement(s: &str) -> Result<Statement, String> {
-    let tokens = tokenize(s)?;
-    let mut iter = tokens.into_iter().peekable();
-    parse_stmt(&mut iter)
 }
 
 pub fn parse_file(file: &str) -> Result<Vec<Statement>, String> {
@@ -37,12 +31,14 @@ pub fn parse_file(file: &str) -> Result<Vec<Statement>, String> {
     let mut iter = tokens.into_iter().peekable();
     let mut statements = Vec::new();
     while iter.peek().is_some() {
-        statements.push(parse_stmt(&mut iter)?);
+        statements.push(parse_statement(&mut iter)?);
     }
     Ok(statements)
 }
 
-pub fn parse_stmt(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<Statement, String> {
+pub fn parse_statement(
+    tokens: &mut Peekable<impl Iterator<Item = Token>>,
+) -> Result<Statement, String> {
     let statement = match tokens.peek() {
         Some(Token::Keyword(Keyword::Let)) => parse_let_statement(tokens)?,
         Some(Token::Keyword(Keyword::Val)) => parse_val_statement(tokens)?,
@@ -438,6 +434,10 @@ fn parse_non_constructor_pattern(
 #[cfg(test)]
 mod tests {
     use crate::lexer;
+    use crate::{
+        e_ap, e_bool, e_ident, e_if, e_int, e_lambda, e_let, e_match, p_bool, p_constructor, p_int,
+        p_var, p_wildcard, t_bool, t_constructor, t_forall, t_fun, t_int, t_type_var,
+    };
 
     use super::*;
 
@@ -446,10 +446,7 @@ mod tests {
         let tokens = lexer::tokenize("int -> bool").unwrap();
         let mut iter = tokens.into_iter().peekable();
 
-        assert_eq!(
-            parse_type_expr(&mut iter),
-            Ok(TypeExpr::fun(TypeExpr::Int, TypeExpr::Bool))
-        );
+        assert_eq!(parse_type_expr(&mut iter), Ok(t_fun!(t_int!(), t_bool!())));
     }
 
     #[test]
@@ -459,10 +456,7 @@ mod tests {
 
         assert_eq!(
             parse_type_expr(&mut iter),
-            Ok(TypeExpr::fun(
-                TypeExpr::Constructor("MyType".to_string(), vec![]),
-                TypeExpr::Bool
-            ))
+            Ok(t_fun!(t_constructor!("MyType"), t_bool!()))
         );
     }
 
@@ -473,20 +467,15 @@ mod tests {
 
         assert_eq!(
             parse_type_expr(&mut iter),
-            Ok(TypeExpr::fun(
-                TypeExpr::Int,
-                TypeExpr::fun(
-                    TypeExpr::constructor(
+            Ok(t_fun!(
+                t_int!(),
+                t_fun!(
+                    t_constructor!(
                         "MyType",
-                        vec![
-                            TypeExpr::TypeVar("a".to_string()),
-                            TypeExpr::fun(
-                                TypeExpr::constructor("MyOtherType", vec![]),
-                                TypeExpr::type_var("b")
-                            )
-                        ]
+                        t_type_var!("a"),
+                        t_fun!(t_constructor!("MyOtherType"), t_type_var!("b"))
                     ),
-                    TypeExpr::Bool
+                    t_bool!()
                 )
             ))
         );
@@ -499,10 +488,7 @@ mod tests {
 
         assert_eq!(
             parse_arrow_type_expr(&mut iter),
-            Ok(TypeExpr::fun(
-                TypeExpr::Int,
-                TypeExpr::fun(TypeExpr::Bool, TypeExpr::Int)
-            ))
+            Ok(t_fun!(t_int!(), t_fun!(t_bool!(), t_int!())))
         );
     }
 
@@ -513,9 +499,9 @@ mod tests {
 
         assert_eq!(
             parse_arrow_type_expr(&mut iter),
-            Ok(TypeExpr::fun(
-                TypeExpr::fun(TypeExpr::type_var("a"), TypeExpr::type_var("b"),),
-                TypeExpr::type_var("a")
+            Ok(t_fun!(
+                t_fun!(t_type_var!("a"), t_type_var!("b")),
+                t_type_var!("a")
             ))
         );
     }
@@ -527,14 +513,11 @@ mod tests {
 
         assert_eq!(
             parse_expr(&mut iter),
-            Ok(Expr::lambda(
+            Ok(e_lambda!(
                 "x",
-                Expr::lambda(
+                e_lambda!(
                     "y",
-                    Expr::ap(
-                        Expr::ap(Expr::ident("plus"), Expr::ident("x")),
-                        Expr::ident("y")
-                    )
+                    e_ap!(e_ap!(e_ident!("plus"), e_ident!("x")), e_ident!("y"))
                 )
             ))
         );
@@ -547,13 +530,10 @@ mod tests {
 
         assert_eq!(
             parse_expr(&mut iter),
-            Ok(Expr::if_(
-                Expr::bool(true),
-                Expr::ap(
-                    Expr::ap(Expr::ident("mul"), Expr::ident("x"),),
-                    Expr::ident("y"),
-                ),
-                Expr::ap(Expr::lambda("x", Expr::ident("x"),), Expr::ident("x"))
+            Ok(e_if!(
+                e_bool!(true),
+                e_ap!(e_ap!(e_ident!("mul"), e_ident!("x")), e_ident!("y")),
+                e_ap!(e_lambda!("x", e_ident!("x")), e_ident!("x"))
             ))
         );
     }
@@ -564,8 +544,11 @@ mod tests {
         let mut iter = tokens.into_iter().peekable();
 
         assert_eq!(
-            parse_stmt(&mut iter),
-            Ok(Statement::let_("f", Expr::lambda("x", Expr::ident("x"))))
+            parse_statement(&mut iter),
+            Ok(Statement::Let(
+                "f".to_string(),
+                Rc::new(e_lambda!("x", e_ident!("x")))
+            ))
         );
     }
 
@@ -576,10 +559,10 @@ mod tests {
 
         assert_eq!(
             parse_expr(&mut iter),
-            Ok(Expr::let_(
+            Ok(e_let!(
                 "x",
-                Expr::ap(Expr::ident("f"), Expr::ident("y")),
-                Expr::ap(Expr::ident("x"), Expr::int(5))
+                e_ap!(e_ident!("f"), e_ident!("y")),
+                e_ap!(e_ident!("x"), e_int!(5))
             ))
         );
     }
@@ -591,11 +574,9 @@ mod tests {
 
         assert_eq!(
             parse_type_expr(&mut iter),
-            Ok(TypeExpr::forall(
-                RedBlackTreeSet::new()
-                    .insert("a".to_string())
-                    .insert("b".to_string()),
-                TypeExpr::fun(TypeExpr::type_var("a"), TypeExpr::type_var("b"))
+            Ok(t_forall!(
+                ["a", "b"],
+                t_fun!(t_type_var!("a"), t_type_var!("b"))
             ))
         );
     }
@@ -606,14 +587,14 @@ mod tests {
         let mut iter = tokens.into_iter().peekable();
 
         assert_eq!(
-            parse_stmt(&mut iter),
+            parse_statement(&mut iter),
             Ok(Statement::Data(
                 "MyType".to_string(),
                 vec![],
                 vec![
-                    TypeExpr::constructor("A", vec![]),
-                    TypeExpr::constructor("BB", vec![]),
-                    TypeExpr::constructor("Ccc", vec![]),
+                    t_constructor!("A"),
+                    t_constructor!("BB"),
+                    t_constructor!("Ccc"),
                 ]
             ))
         );
@@ -625,7 +606,7 @@ mod tests {
         let mut iter = tokens.into_iter().peekable();
 
         assert_eq!(
-            parse_stmt(&mut iter),
+            parse_statement(&mut iter),
             Ok(Statement::Data(
                 "MyType".to_string(),
                 vec!["a".to_string(), "b".to_string()],
@@ -645,17 +626,11 @@ mod tests {
 
         assert_eq!(
             parse_expr(&mut iter),
-            Ok(Expr::Match(
-                Rc::new(Expr::ident("x")),
-                vec![
-                    (
-                        Rc::new(ExprPattern::Constructor("A".to_string(), vec![])),
-                        Rc::new(Expr::int(1))
-                    ),
-                    (
-                        Rc::new(ExprPattern::Constructor("B".to_string(), vec![])),
-                        Rc::new(Expr::int(2))
-                    ),
+            Ok(e_match!(
+                e_ident!("x"),
+                [
+                    (p_constructor!("A"), e_int!(1)),
+                    (p_constructor!("B"), e_int!(2))
                 ]
             ))
         );
@@ -663,34 +638,24 @@ mod tests {
 
     #[test]
     fn test_match_with_args() {
-        let tokens = lexer::tokenize("match f x with | A 2 -> 1 | B (C _) true -> 2").unwrap();
+        let tokens = lexer::tokenize("match f x with | A 2 -> 1 | B (C _) true x -> 2").unwrap();
         let mut iter = tokens.into_iter().peekable();
 
         assert_eq!(
             parse_expr(&mut iter),
-            Ok(Expr::Match(
-                Rc::new(Expr::ap(Expr::ident("f"), Expr::ident("x"))),
-                vec![
+            Ok(e_match!(
+                e_ap!(e_ident!("f"), e_ident!("x")),
+                [
+                    (p_constructor!("A", p_int!(2)), e_int!(1)),
                     (
-                        Rc::new(ExprPattern::Constructor(
-                            "A".to_string(),
-                            vec![Rc::new(ExprPattern::Int(2))]
-                        )),
-                        Rc::new(Expr::int(1))
-                    ),
-                    (
-                        Rc::new(ExprPattern::Constructor(
-                            "B".to_string(),
-                            vec![
-                                Rc::new(ExprPattern::Constructor(
-                                    "C".to_string(),
-                                    vec![Rc::new(ExprPattern::Wildcard)]
-                                )),
-                                Rc::new(ExprPattern::Bool(true))
-                            ]
-                        )),
-                        Rc::new(Expr::int(2))
-                    ),
+                        p_constructor!(
+                            "B",
+                            p_constructor!("C", p_wildcard!()),
+                            p_bool!(true),
+                            p_var!("x")
+                        ),
+                        e_int!(2)
+                    )
                 ]
             ))
         );

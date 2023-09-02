@@ -6,6 +6,7 @@ use typing::infer;
 use crate::{env::Env, parser::parse};
 
 mod ast;
+mod ast_macros;
 mod builtins;
 mod env;
 mod eval;

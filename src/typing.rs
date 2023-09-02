@@ -520,7 +520,7 @@ mod tests {
         ast::{Expr, TypeExpr},
         env::Env,
         lexer::tokenize,
-        parser::{self, parse_statement},
+        parser,
     };
 
     use super::infer;

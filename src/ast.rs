@@ -50,40 +50,6 @@ pub enum Expr {
     Match(Rc<Expr>, Vec<(Rc<ExprPattern>, Rc<Expr>)>),
 }
 
-impl Expr {
-    #[cfg(test)]
-    pub fn int(n: i64) -> Self {
-        Self::Int(n)
-    }
-
-    #[cfg(test)]
-    pub fn bool(b: bool) -> Self {
-        Self::Bool(b)
-    }
-
-    pub fn ident(name: &str) -> Self {
-        Self::Ident(name.to_string())
-    }
-
-    #[cfg(test)]
-    pub fn if_(cond: Expr, then: Expr, else_: Expr) -> Self {
-        Self::If(Rc::new(cond), Rc::new(then), Rc::new(else_))
-    }
-
-    #[cfg(test)]
-    pub fn let_(name: &str, expr: Expr, body: Expr) -> Self {
-        Self::Let(name.to_string(), Rc::new(expr), Rc::new(body))
-    }
-
-    pub fn lambda(param: &str, body: Expr) -> Self {
-        Self::Lambda(param.to_string(), Rc::new(body))
-    }
-
-    pub fn ap(fun: Expr, arg: Expr) -> Self {
-        Self::Ap(Rc::new(fun), Rc::new(arg))
-    }
-}
-
 impl Display for Expr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -206,17 +172,6 @@ pub enum Statement {
     Data(String, Vec<String>, Vec<TypeExpr>),
 }
 
-impl Statement {
-    pub fn let_(name: &str, expr: Expr) -> Self {
-        Self::Let(name.to_string(), Rc::new(expr))
-    }
-
-    #[cfg(test)]
-    pub fn val(name: &str, ty: TypeExpr) -> Self {
-        Self::Val(name.to_string(), Rc::new(ty))
-    }
-}
-
 impl Display for Statement {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -238,62 +193,58 @@ impl Display for Statement {
 
 #[cfg(test)]
 mod tests {
+    use crate::{e_ap, e_ident, e_if, e_int, e_lambda, t_bool, t_forall, t_fun, t_int, t_type_var};
+
     use super::*;
 
     #[test]
     fn display_expr() {
-        let expr = Expr::ap(
-            Expr::lambda(
+        let expr = e_ap!(
+            e_lambda!(
                 "x",
-                Expr::ap(
-                    Expr::lambda("y", Expr::ap(Expr::ident("x"), Expr::ident("y"))),
-                    Expr::int(1),
-                ),
+                e_ap!(
+                    e_lambda!("y", e_ap!(e_ident!("x"), e_ident!("y"))),
+                    e_int!(1)
+                )
             ),
-            Expr::int(2),
+            e_int!(2)
         );
         assert_eq!(format!("{}", expr), "((fun x -> ((fun y -> (x y)) 1)) 2)");
     }
 
     #[test]
     fn display_expr_if() {
-        let expr = Expr::if_(Expr::bool(true), Expr::int(1), Expr::int(2));
+        let expr = e_if!(e_ident!("true"), e_int!(1), e_int!(2));
         assert_eq!(format!("{}", expr), "(if true then 1 else 2)");
     }
 
     #[test]
     fn display_type_expr() {
-        let ty = TypeExpr::fun(
-            TypeExpr::fun(TypeExpr::Int, TypeExpr::type_var("a")),
-            TypeExpr::Bool,
-        );
+        let ty = t_fun!(t_fun!(t_int!(), t_type_var!("a")), t_bool!());
         assert_eq!(format!("{}", ty), "((int -> 'a) -> bool)");
     }
 
     #[test]
     fn display_let_statement() {
-        let stmt = Statement::let_(
-            "f",
-            Expr::lambda("x", Expr::ap(Expr::ident("f"), Expr::ident("x"))),
+        let stmt = Statement::Let(
+            "f".to_string(),
+            Rc::new(e_lambda!("x", e_ap!(e_ident!("f"), e_ident!("x")))),
         );
         assert_eq!(format!("{}", stmt), "let f = (fun x -> (f x))");
     }
 
     #[test]
     fn display_val_statement() {
-        let stmt = Statement::val(
-            "f",
-            TypeExpr::fun(TypeExpr::type_var("a"), TypeExpr::type_var("a")),
+        let stmt = Statement::Val(
+            "f".to_string(),
+            Rc::new(t_fun!(t_type_var!("a"), t_type_var!("a"))),
         );
         assert_eq!(format!("{}", stmt), "val f : ('a -> 'a)");
     }
 
     #[test]
     fn free_variables() {
-        let ty = TypeExpr::fun(
-            TypeExpr::fun(TypeExpr::Int, TypeExpr::type_var("a")),
-            TypeExpr::type_var("b"),
-        );
+        let ty = t_fun!(t_fun!(t_int!(), t_type_var!("a")), t_type_var!("b"));
         assert_eq!(
             ty.free_variables(),
             RedBlackTreeSet::new()
@@ -301,10 +252,7 @@ mod tests {
                 .insert("b".to_string())
         );
 
-        let ty = TypeExpr::forall(
-            RedBlackTreeSet::new().insert("a".to_string()),
-            TypeExpr::fun(TypeExpr::type_var("a"), TypeExpr::type_var("b")),
-        );
+        let ty = t_forall!(["a"], t_fun!(t_type_var!("a"), t_type_var!("b")));
 
         assert_eq!(
             ty.free_variables(),

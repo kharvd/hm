@@ -33,30 +33,29 @@ pub fn try_pattern_match(
 mod tests {
     use std::rc::Rc;
 
-    use crate::{ast::ExprPattern, env::Env, pattern::try_pattern_match, value::Value};
+    use crate::{
+        ast::ExprPattern, env::Env, p_constructor, p_int, p_var, p_wildcard,
+        pattern::try_pattern_match, value::Value,
+    };
 
     #[test]
     fn test_constant() {
         let env = Env::new();
-        let res = try_pattern_match(&env, &Value::Int(42), &ExprPattern::Int(42));
+        let res = try_pattern_match(&env, &Value::Int(42), &p_int!(42));
         assert_eq!(res, Some(env));
     }
 
     #[test]
     fn test_wildcard() {
         let env = Env::new();
-        let res = try_pattern_match(&env, &Value::Int(42), &ExprPattern::Wildcard);
+        let res = try_pattern_match(&env, &Value::Int(42), &p_wildcard!());
         assert_eq!(res, Some(env));
     }
 
     #[test]
     fn test_binding() {
         let env = Env::new();
-        let res = try_pattern_match(
-            &env,
-            &Value::Int(42),
-            &ExprPattern::Variable("x".to_string()),
-        );
+        let res = try_pattern_match(&env, &Value::Int(42), &p_var!("x"));
         assert_eq!(res, Some(env.extend("x", Value::Int(42))));
     }
 
@@ -66,7 +65,7 @@ mod tests {
         let res = try_pattern_match(
             &env,
             &Value::Data("True".to_string(), vec![]),
-            &ExprPattern::Constructor("True".to_string(), vec![]),
+            &p_constructor!("True"),
         );
         assert_eq!(res, Some(env));
     }
@@ -77,13 +76,7 @@ mod tests {
         let res = try_pattern_match(
             &env,
             &Value::Data("Pair".to_string(), vec![Value::Int(1), Value::Bool(true)]),
-            &ExprPattern::Constructor(
-                "Pair".to_string(),
-                vec![
-                    Rc::new(ExprPattern::Variable("x".to_string())),
-                    Rc::new(ExprPattern::Variable("y".to_string())),
-                ],
-            ),
+            &p_constructor!("Pair", p_var!("x"), p_var!("y")),
         );
         assert_eq!(
             res,
@@ -106,18 +99,10 @@ mod tests {
                     Value::Data("Pair".to_string(), vec![Value::Bool(true), Value::Int(2)]),
                 ],
             ),
-            &ExprPattern::Constructor(
-                "Pair".to_string(),
-                vec![
-                    Rc::new(ExprPattern::Variable("x".to_string())),
-                    Rc::new(ExprPattern::Constructor(
-                        "Pair".to_string(),
-                        vec![
-                            Rc::new(ExprPattern::Variable("y".to_string())),
-                            Rc::new(ExprPattern::Variable("z".to_string())),
-                        ],
-                    )),
-                ],
+            &p_constructor!(
+                "Pair",
+                p_var!("x"),
+                p_constructor!("Pair", p_var!("y"), p_var!("z"))
             ),
         );
         assert_eq!(

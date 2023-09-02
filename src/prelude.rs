@@ -90,9 +90,6 @@ impl Env {
                 | Cons x xs -> Cons x (append xs ys)
             
             let rec reverse = fun xs -> foldl (fun acc -> fun x -> Cons x acc) Nil xs
-
-            let rec fact = fun n -> if eq n 0 then 1 else mult n (fact (minus n 1))
-            let rec fib = fun n -> if or (eq n 0) (eq n 1) then 1 else plus (fib (minus n 1)) (fib (minus n 2))
         ";
 
         env.eval_file(prelude_source).unwrap()
