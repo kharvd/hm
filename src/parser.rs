@@ -254,6 +254,7 @@ fn parse_expr(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<Expr
     while let Some(next) = tokens.peek() {
         match next {
             Token::LParen
+            | Token::LBracket
             | Token::Variable(_)
             | Token::Constructor(_)
             | Token::Int(_)
@@ -287,10 +288,38 @@ fn parse_non_ap_expr(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Resu
                 _ => return Err("Expected closing parenthesis".to_string()),
             }
         }
+        Some(Token::LBracket) => parse_list(tokens)?,
         t => return Err(format!("Expected expression, got {:?}", t)),
     };
 
     Ok(expr)
+}
+
+fn parse_list(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<Expr, String> {
+    let mut exprs = Vec::new();
+    loop {
+        match tokens.peek() {
+            Some(Token::RBracket) => {
+                tokens.next();
+                break;
+            }
+            Some(Token::Comma) => {
+                tokens.next();
+            }
+            _ => {
+                let expr = parse_expr(tokens)?;
+                exprs.push(Rc::new(expr));
+            }
+        }
+    }
+    let mut list = Expr::Ident("Nil".to_string());
+    for expr in exprs.into_iter().rev() {
+        list = Expr::Ap(
+            Rc::new(Expr::Ap(Rc::new(Expr::Ident("Cons".to_string())), expr)),
+            Rc::new(list),
+        );
+    }
+    Ok(list)
 }
 
 fn parse_lambda_expr(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<Expr, String> {

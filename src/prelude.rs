@@ -90,6 +90,19 @@ impl Env {
                 | Cons x xs -> Cons x (append xs ys)
             
             let rec reverse = fun xs -> foldl (fun acc -> fun x -> Cons x acc) Nil xs
+
+            let rec range = fun n ->
+                if eq n 0 then Nil else
+                Cons (minus n 1) (range (minus n 1))
+
+            let head = fun xs ->
+                match xs with
+                | Cons x _ -> x
+            
+            let tail = fun xs ->
+                match xs with
+                | Nil -> Nil
+                | Cons x rest -> rest
         ";
 
         env.eval_file(prelude_source).unwrap()

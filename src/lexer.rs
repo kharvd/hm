@@ -28,6 +28,9 @@ pub enum Token {
     Keyword(Keyword),
     LParen,
     RParen,
+    LBracket,
+    RBracket,
+    Comma,
     Arrow,
     Colon,
     Apostrophe,
@@ -92,6 +95,18 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, String> {
             }
             ')' => {
                 tokens.push(Token::RParen);
+                chars.next();
+            }
+            '[' => {
+                tokens.push(Token::LBracket);
+                chars.next();
+            }
+            ']' => {
+                tokens.push(Token::RBracket);
+                chars.next();
+            }
+            ',' => {
+                tokens.push(Token::Comma);
                 chars.next();
             }
             ':' => {
