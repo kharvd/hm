@@ -125,6 +125,12 @@ impl Env {
                 | (Nil, Nil) -> true
                 | (Cons x xs, Cons y ys) -> and (eq x y) (list_eq xs ys)
                 | _ -> false
+            
+            let rec zip = fun xs -> fun ys ->
+                match (xs, ys) with
+                | (Nil, Nil) -> Nil
+                | (Cons x xs, Cons y ys) -> Cons (Tuple2 x y) (zip xs ys)
+                | _ -> Nil
         ";
 
         env.eval_file(prelude_source).unwrap()

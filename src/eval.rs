@@ -294,8 +294,16 @@ mod tests {
     #[test]
     fn eval_rec() {
         let env = eval_file(
-            "let rec fact = fun n -> if eq n 0 then 1 else mult n (fact (minus n 1))
-            let rec fib = fun n -> if or (eq n 0) (eq n 1) then 1 else plus (fib (minus n 1)) (fib (minus n 2))",
+            "let rec fact = fun n -> 
+                match n with
+                | 0 -> 1
+                | _ -> mult n (fact (minus n 1))
+
+            let rec fib = fun n -> 
+                match n with
+                | 0 -> 1
+                | 1 -> 1
+                | _ -> plus (fib (minus n 1)) (fib (minus n 2))",
         );
 
         assert_same_value!(env, "fact 5", "120");
