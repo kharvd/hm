@@ -562,8 +562,8 @@ mod tests {
         let env = Env::prelude();
         assert_type!(&env, "5", "int");
         assert_type!(&env, "true", "bool");
-        assert_type!(&env, "fun x -> plus x 1", "int -> int");
-        assert_type!(&env, "fun x -> plus x", "int -> int -> int");
+        assert_type!(&env, "fun x -> x + 1", "int -> int");
+        assert_type!(&env, "fun x -> (+ x)", "int -> int -> int");
     }
 
     #[test]
@@ -631,7 +631,7 @@ mod tests {
         assert_type!(&env, "Positive", "Sign");
         assert_type!(
             &env,
-            "fun x -> if lt x 0 then Negative else if gt x 0 then Positive else Zero",
+            "fun x -> if x < 0 then Negative else if x > 0 then Positive else Zero",
             "int -> Sign"
         );
     }

@@ -286,7 +286,7 @@ mod tests {
         let env = eval_file(
             "let x = 1
             let y = 42
-            let z = plus x y",
+            let z = x + y",
         );
         assert_same_value!(env, "z", "43");
     }
@@ -297,13 +297,13 @@ mod tests {
             "let rec fact = fun n -> 
                 match n with
                 | 0 -> 1
-                | _ -> mult n (fact (minus n 1))
+                | _ -> n * fact (n - 1)
 
             let rec fib = fun n -> 
                 match n with
                 | 0 -> 1
                 | 1 -> 1
-                | _ -> plus (fib (minus n 1)) (fib (minus n 2))",
+                | _ -> fib (n - 1) + fib (n - 2)",
         );
 
         assert_same_value!(env, "fact 5", "120");
@@ -314,7 +314,7 @@ mod tests {
     fn eval_let_expr() {
         let env = eval_file(
             "let x = 1
-            let y = let x = plus x 1 in x",
+            let y = let x = x + 1 in x",
         );
         assert_same_value!(env, "y", "2");
     }
@@ -323,7 +323,7 @@ mod tests {
     fn eval_data_simple() {
         let env = eval_file(
             "data Sign = Negative | Zero | Positive
-            let f = fun x -> if lt x 0 then Negative else if gt x 0 then Positive else Zero",
+            let f = fun x -> if x < 0 then Negative else if x > 0 then Positive else Zero",
         );
 
         assert_eq!(
@@ -384,7 +384,7 @@ mod tests {
             "data Pair 'a 'b = Pair 'a 'b
             let f = fun x ->
                 match x with
-                | Pair a b -> plus a b",
+                | Pair a b -> a + b",
         );
 
         assert_same_value!(env, "f (Pair 1 2)", "3");
@@ -397,7 +397,7 @@ mod tests {
             let rec len = fun l ->
                 match l with
                 | Nil -> 0
-                | Cons _ xs -> plus 1 (len xs)",
+                | Cons _ xs -> 1 + (len xs)",
         );
 
         assert_same_value!(env, "len (Cons 1 (Cons 2 (Cons 3 Nil)))", "3");

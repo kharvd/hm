@@ -7,38 +7,39 @@ use crate::{
 impl Env {
     pub fn prelude() -> Env {
         let env = Env::new()
-            .extend("plus", Value::new_builtin(IntBinOps::Plus))
-            .extend("minus", Value::new_builtin(IntBinOps::Minus))
-            .extend("mult", Value::new_builtin(IntBinOps::Mult))
-            .extend("div", Value::new_builtin(IntBinOps::Div))
-            .extend("lt", Value::new_builtin(IntBinOps::Lt))
-            .extend("leq", Value::new_builtin(IntBinOps::Leq))
-            .extend("gt", Value::new_builtin(IntBinOps::Gt))
-            .extend("geq", Value::new_builtin(IntBinOps::Geq))
+            .extend("+", Value::new_builtin(IntBinOps::Plus))
+            .extend("-", Value::new_builtin(IntBinOps::Minus))
+            .extend("*", Value::new_builtin(IntBinOps::Mult))
+            .extend("/", Value::new_builtin(IntBinOps::Div))
+            .extend("<", Value::new_builtin(IntBinOps::Lt))
+            .extend("<=", Value::new_builtin(IntBinOps::Leq))
+            .extend(">", Value::new_builtin(IntBinOps::Gt))
+            .extend(">=", Value::new_builtin(IntBinOps::Geq))
             .extend("neg", Value::new_builtin(IntUnaryOps::Neg))
             .extend("not", Value::new_builtin(BoolUnaryOps::Not))
-            .extend("and", Value::new_builtin(BoolBinOps::And))
-            .extend("or", Value::new_builtin(BoolBinOps::Or))
+            .extend("&&", Value::new_builtin(BoolBinOps::And))
+            .extend("||", Value::new_builtin(BoolBinOps::Or))
             .extend("xor", Value::new_builtin(BoolBinOps::Xor))
             .extend("fix", Value::Fix);
 
         let prelude_source = "
-            val plus : int -> int -> int
-            val minus : int -> int -> int
-            val mult : int -> int -> int
-            val div : int -> int -> int
-            val lt : int -> int -> bool
-            val leq : int -> int -> bool
-            val gt : int -> int -> bool
-            val geq : int -> int -> bool
+            val (+) : int -> int -> int
+            val (-) : int -> int -> int
+            val (*) : int -> int -> int
+            val (/) : int -> int -> int
+            val (<) : int -> int -> bool
+            val (<=) : int -> int -> bool
+            val (>) : int -> int -> bool
+            val (>=) : int -> int -> bool
             val neg : int -> int
+
             val not : bool -> bool
-            val and : bool -> bool -> bool
-            val or : bool -> bool -> bool
+            val (&&) : bool -> bool -> bool
+            val (||) : bool -> bool -> bool
             val xor : bool -> bool -> bool
 
             val fix : ('a -> 'a) -> 'a
-            let eq = fun x -> fun y -> and (leq x y) (geq x y)
+            let (==) = fun x -> fun y -> (x <= y) && (x >= y)
                 
             data Unit = Unit
             data Tuple1 'a = Tuple1 'a
@@ -66,7 +67,7 @@ impl Env {
             let rec len = fun xs -> 
                 match xs with 
                 | Nil -> 0 
-                | Cons x xs -> plus 1 (len xs)
+                | Cons x xs -> 1 + (len xs)
 
             let rec map = fun f -> fun xs ->
                 match xs with
@@ -83,22 +84,22 @@ impl Env {
                 | Nil -> acc
                 | Cons x xs -> f x (foldr f acc xs)
             
-            let rec sum = fun xs -> foldl plus 0 xs
-            let rec product = fun xs -> foldl mult 1 xs
-            let rec all = fun xs -> foldl and true xs
-            let rec any = fun xs -> foldl or false xs
+            let rec sum = fun xs -> foldl (+) 0 xs
+            let rec product = fun xs -> foldl (*) 1 xs
+            let rec all = fun xs -> foldl (&&) true xs
+            let rec any = fun xs -> foldl (||) false xs
 
             let rec take = fun n -> fun xs ->
-                if eq n 0 then Nil else
+                if n == 0 then Nil else
                 match xs with
                 | Nil -> Nil
-                | Cons x xs -> Cons x (take (minus n 1) xs)
+                | Cons x xs -> Cons x (take (n - 1) xs)
             
             let rec drop = fun n -> fun xs ->
-                if eq n 0 then xs else
+                if n == 0 then xs else
                 match xs with
                 | Nil -> Nil
-                | Cons x xs -> drop (minus n 1) xs
+                | Cons x xs -> drop (n - 1) xs
             
             let rec append = fun xs -> fun ys ->
                 match xs with
@@ -108,8 +109,8 @@ impl Env {
             let rec reverse = fun xs -> foldl (fun acc -> fun x -> Cons x acc) Nil xs
 
             let rec range = fun n ->
-                if eq n 0 then Nil else
-                Cons (minus n 1) (range (minus n 1))
+                if n == 0 then Nil else
+                Cons (n - 1) (range (n - 1))
 
             let head = fun xs ->
                 match xs with
@@ -123,7 +124,7 @@ impl Env {
             let rec list_eq = fun xs -> fun ys ->
                 match (xs, ys) with
                 | (Nil, Nil) -> true
-                | (Cons x xs, Cons y ys) -> and (eq x y) (list_eq xs ys)
+                | (Cons x xs, Cons y ys) -> (x == y) && (list_eq xs ys)
                 | _ -> false
             
             let rec zip = fun xs -> fun ys ->

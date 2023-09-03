@@ -4,7 +4,7 @@ use std::rc::Rc;
 use rpds::RedBlackTreeSet;
 
 use crate::ast::{Expr, ExprPattern, Statement, TypeExpr};
-use crate::lexer::{tokenize, Keyword, Token};
+use crate::lexer::{tokenize, InfixOp, Keyword, Token};
 
 #[derive(Debug)]
 pub enum ParseResult {
@@ -53,10 +53,7 @@ fn parse_val_statement(
     tokens: &mut Peekable<impl Iterator<Item = Token>>,
 ) -> Result<Statement, String> {
     tokens.next();
-    let name = match tokens.next() {
-        Some(Token::Variable(name)) => name,
-        _ => return Err("Expected identifier after 'val'".to_string()),
-    };
+    let name = parse_binding_name(tokens)?;
     match tokens.next() {
         Some(Token::Colon) => (),
         _ => return Err("Expected ':' after identifier".to_string()),
@@ -72,7 +69,7 @@ fn parse_let_statement(
 
     match tokens.peek() {
         Some(Token::Keyword(Keyword::Rec)) => parse_let_rec_statement(tokens),
-        Some(Token::Variable(_)) => {
+        Some(Token::Variable(_)) | Some(Token::LParen) => {
             let (name, expr) = parse_let_name_binding(tokens)?;
             Ok(Statement::Let(name, expr))
         }
@@ -148,10 +145,7 @@ fn parse_let_rec_statement(
 fn parse_let_name_binding(
     tokens: &mut Peekable<impl Iterator<Item = Token>>,
 ) -> Result<(String, Rc<Expr>), String> {
-    let name = match tokens.next() {
-        Some(Token::Variable(name)) => name,
-        _ => return Err("Expected identifier after 'let'".to_string()),
-    };
+    let name = parse_binding_name(tokens)?;
 
     match tokens.next() {
         Some(Token::Equals) => (),
@@ -159,6 +153,26 @@ fn parse_let_name_binding(
     }
     let expr = parse_expr(tokens)?;
     Ok((name, Rc::new(expr)))
+}
+
+fn parse_binding_name(
+    tokens: &mut Peekable<impl Iterator<Item = Token>>,
+) -> Result<String, String> {
+    match tokens.next() {
+        Some(Token::Variable(name)) => Ok(name),
+        Some(Token::LParen) => {
+            let name = match tokens.next() {
+                Some(Token::InfixOp(op)) => op.to_string().to_string(),
+                _ => return Err("Expected identifier after 'let' or 'val'".to_string()),
+            };
+            match tokens.next() {
+                Some(Token::RParen) => (),
+                _ => return Err("Expected closing parenthesis".to_string()),
+            }
+            Ok(name)
+        }
+        _ => return Err("Expected identifier after 'let' or 'val'".to_string()),
+    }
 }
 
 pub fn parse_type_expr(
@@ -248,31 +262,104 @@ fn parse_type_constructor(
     Ok(TypeExpr::Constructor(name, args))
 }
 
-fn parse_expr(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<Expr, String> {
-    let mut expr = parse_non_ap_expr(tokens)?;
+impl InfixOp {
+    fn precedence(&self) -> i32 {
+        match self {
+            InfixOp::Mult | InfixOp::Div => 20,
+            InfixOp::Plus | InfixOp::Minus => 10,
+            InfixOp::LessThan
+            | InfixOp::GreaterThan
+            | InfixOp::Equals
+            | InfixOp::NotEquals
+            | InfixOp::LessEquals
+            | InfixOp::GreaterEquals => 5,
+            InfixOp::And => 3,
+            InfixOp::Or => 2,
+        }
+    }
+}
 
-    while let Some(next) = tokens.peek() {
-        match next {
-            Token::LParen
-            | Token::LBracket
-            | Token::Variable(_)
-            | Token::Constructor(_)
-            | Token::Int(_)
-            | Token::Underscore
-            | Token::Keyword(Keyword::True)
-            | Token::Keyword(Keyword::False) => {
-                expr = Expr::Ap(Rc::new(expr), Rc::new(parse_non_ap_expr(tokens)?));
+fn parse_expr(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<Expr, String> {
+    parse_expr_prec(tokens, 0)
+}
+
+fn parse_expr_prec(
+    tokens: &mut Peekable<impl Iterator<Item = Token>>,
+    precedence: i32,
+) -> Result<Expr, String> {
+    let mut lhs = parse_primary(tokens)?;
+
+    while let Some(op) = tokens.peek() {
+        let op = (*op).clone();
+
+        match op {
+            Token::InfixOp(op) => {
+                let op_precedence = op.precedence();
+                if op_precedence < precedence {
+                    break;
+                }
+                tokens.next();
+
+                let rhs = parse_expr_prec(tokens, op_precedence + 1)?;
+
+                lhs = make_infix_op(op, lhs, rhs);
             }
-            _ => break,
+            Token::RParen
+            | Token::RBracket
+            | Token::Keyword(Keyword::Then)
+            | Token::Keyword(Keyword::Else)
+            | Token::Keyword(Keyword::In)
+            | Token::Keyword(Keyword::With)
+            | Token::Keyword(Keyword::Let)
+            | Token::Keyword(Keyword::Data)
+            | Token::Keyword(Keyword::Val)
+            | Token::Comma
+            | Token::Pipe => break,
+            _ => {
+                lhs = Expr::Ap(Rc::new(lhs), Rc::new(parse_primary(tokens)?));
+            }
         }
     }
 
-    Ok(expr)
+    Ok(lhs)
 }
 
-fn parse_non_ap_expr(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<Expr, String> {
-    let expr = match tokens.next() {
+fn make_infix_op(op: InfixOp, lhs: Expr, rhs: Expr) -> Expr {
+    Expr::Ap(
+        Rc::new(Expr::Ap(
+            Rc::new(Expr::Ident(op.to_string().to_string())),
+            Rc::new(lhs),
+        )),
+        Rc::new(rhs),
+    )
+}
+
+// fn parse_expr(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<Expr, String> {
+//     let mut expr = parse_non_ap_expr(tokens)?;
+
+//     while let Some(next) = tokens.peek() {
+//         match next {
+//             Token::LParen
+//             | Token::LBracket
+//             | Token::Variable(_)
+//             | Token::Constructor(_)
+//             | Token::Int(_)
+//             | Token::Underscore
+//             | Token::Keyword(Keyword::True)
+//             | Token::Keyword(Keyword::False) => {
+//                 expr = Expr::Ap(Rc::new(expr), Rc::new(parse_non_ap_expr(tokens)?));
+//             }
+//             _ => break,
+//         }
+//     }
+
+//     Ok(expr)
+// }
+
+fn parse_primary(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<Expr, String> {
+    Ok(match tokens.next() {
         Some(Token::Variable(name)) => Expr::Ident(name),
+        Some(Token::InfixOp(op)) => Expr::Ident(op.to_string().to_string()),
         Some(Token::Constructor(name)) => Expr::Ident(name),
         Some(Token::Int(i)) => Expr::Int(i),
         Some(Token::Keyword(Keyword::True)) => Expr::Bool(true),
@@ -284,10 +371,27 @@ fn parse_non_ap_expr(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Resu
         Some(Token::LParen) => parse_parenthesized_expr(tokens)?,
         Some(Token::LBracket) => parse_list(tokens)?,
         t => return Err(format!("Expected expression, got {:?}", t)),
-    };
-
-    Ok(expr)
+    })
 }
+
+// fn parse_non_ap_expr(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<Expr, String> {
+//     let expr = match tokens.next() {
+//         Some(Token::Variable(name)) => Expr::Ident(name),
+//         Some(Token::Constructor(name)) => Expr::Ident(name),
+//         Some(Token::Int(i)) => Expr::Int(i),
+//         Some(Token::Keyword(Keyword::True)) => Expr::Bool(true),
+//         Some(Token::Keyword(Keyword::False)) => Expr::Bool(false),
+//         Some(Token::Keyword(Keyword::If)) => parse_if_expr(tokens)?,
+//         Some(Token::Keyword(Keyword::Fun)) => parse_lambda_expr(tokens)?,
+//         Some(Token::Keyword(Keyword::Let)) => parse_let_expr(tokens)?,
+//         Some(Token::Keyword(Keyword::Match)) => parse_match_expr(tokens)?,
+//         Some(Token::LParen) => parse_parenthesized_expr(tokens)?,
+//         Some(Token::LBracket) => parse_list(tokens)?,
+//         t => return Err(format!("Expected expression, got {:?}", t)),
+//     };
+
+//     Ok(expr)
+// }
 
 fn parse_parenthesized_expr(
     tokens: &mut Peekable<impl Iterator<Item = Token>>,

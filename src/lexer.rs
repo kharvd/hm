@@ -1,6 +1,6 @@
 use itertools::Itertools;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Keyword {
     Fun,
     Let,
@@ -20,7 +20,42 @@ pub enum Keyword {
     Int,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
+pub enum InfixOp {
+    Plus,
+    Minus,
+    Mult,
+    Div,
+    Equals,
+    NotEquals,
+    LessThan,
+    GreaterThan,
+    LessEquals,
+    GreaterEquals,
+    And,
+    Or,
+}
+
+impl InfixOp {
+    pub fn to_string(&self) -> &'static str {
+        match self {
+            InfixOp::Plus => "+",
+            InfixOp::Minus => "-",
+            InfixOp::Mult => "*",
+            InfixOp::Div => "/",
+            InfixOp::Equals => "==",
+            InfixOp::NotEquals => "!=",
+            InfixOp::LessThan => "<",
+            InfixOp::GreaterThan => ">",
+            InfixOp::LessEquals => "<=",
+            InfixOp::GreaterEquals => ">=",
+            InfixOp::And => "&&",
+            InfixOp::Or => "||",
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
 pub enum Token {
     Variable(String),
     Constructor(String),
@@ -38,6 +73,7 @@ pub enum Token {
     Dot,
     Pipe,
     Underscore,
+    InfixOp(InfixOp),
 }
 
 pub fn is_valid_identifier_char(c: char) -> bool {
@@ -122,28 +158,86 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, String> {
                 chars.next();
             }
             '-' => {
-                chars.next(); // consume '-'
-                if chars.next() == Some('>') {
-                    // consume the next character, which should be '>'
+                chars.next();
+                if let Some('>') = chars.peek() {
                     tokens.push(Token::Arrow);
+                    chars.next();
                 } else {
-                    return Err("Unexpected sequence after '-'".to_string());
+                    tokens.push(Token::InfixOp(InfixOp::Minus));
                 }
             }
             '=' => {
-                tokens.push(Token::Equals);
                 chars.next();
+                if let Some('=') = chars.peek() {
+                    tokens.push(Token::InfixOp(InfixOp::Equals));
+                    chars.next();
+                } else {
+                    tokens.push(Token::Equals);
+                }
+            }
+            '<' => {
+                chars.next();
+                if let Some('=') = chars.peek() {
+                    tokens.push(Token::InfixOp(InfixOp::LessEquals));
+                    chars.next();
+                } else {
+                    tokens.push(Token::InfixOp(InfixOp::LessThan));
+                }
+            }
+            '>' => {
+                chars.next();
+                if let Some('=') = chars.peek() {
+                    tokens.push(Token::InfixOp(InfixOp::GreaterEquals));
+                    chars.next();
+                } else {
+                    tokens.push(Token::InfixOp(InfixOp::GreaterThan));
+                }
+            }
+            '!' => {
+                chars.next();
+                if let Some('=') = chars.peek() {
+                    tokens.push(Token::InfixOp(InfixOp::NotEquals));
+                    chars.next();
+                } else {
+                    return Err("Unexpected sequence after '!'".to_string());
+                }
+            }
+            '&' => {
+                chars.next();
+                if let Some('&') = chars.peek() {
+                    tokens.push(Token::InfixOp(InfixOp::And));
+                    chars.next();
+                } else {
+                    return Err("Unexpected sequence after '&'".to_string());
+                }
+            }
+            '|' => {
+                chars.next();
+                if let Some('|') = chars.peek() {
+                    tokens.push(Token::InfixOp(InfixOp::Or));
+                    chars.next();
+                } else {
+                    tokens.push(Token::Pipe);
+                }
             }
             '.' => {
                 tokens.push(Token::Dot);
                 chars.next();
             }
-            '|' => {
-                tokens.push(Token::Pipe);
-                chars.next();
-            }
             '_' => {
                 tokens.push(Token::Underscore);
+                chars.next();
+            }
+            '+' => {
+                tokens.push(Token::InfixOp(InfixOp::Plus));
+                chars.next();
+            }
+            '*' => {
+                tokens.push(Token::InfixOp(InfixOp::Mult));
+                chars.next();
+            }
+            '/' => {
+                tokens.push(Token::InfixOp(InfixOp::Div));
                 chars.next();
             }
             ' ' | '\t' | '\n' | '\r' => {
@@ -248,6 +342,29 @@ mod tests {
                 Token::Keyword(Keyword::In),
                 Token::Variable("f".to_string()),
                 Token::Int(5),
+            ])
+        );
+
+        assert_eq!(
+            tokenize("(x < 5 * 2 + 1) || (y - 5 != 1)"),
+            Ok(vec![
+                Token::LParen,
+                Token::Variable("x".to_string()),
+                Token::InfixOp(InfixOp::LessThan),
+                Token::Int(5),
+                Token::InfixOp(InfixOp::Mult),
+                Token::Int(2),
+                Token::InfixOp(InfixOp::Plus),
+                Token::Int(1),
+                Token::RParen,
+                Token::InfixOp(InfixOp::Or),
+                Token::LParen,
+                Token::Variable("y".to_string()),
+                Token::InfixOp(InfixOp::Minus),
+                Token::Int(5),
+                Token::InfixOp(InfixOp::NotEquals),
+                Token::Int(1),
+                Token::RParen,
             ])
         );
     }

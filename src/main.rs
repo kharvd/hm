@@ -11,6 +11,7 @@ mod builtins;
 mod env;
 mod eval;
 mod lexer;
+mod mini_parser;
 mod parser;
 mod pattern;
 mod prelude;
