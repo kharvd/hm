@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use crate::value::{BuiltinFunc, Value};
+use crate::value::{BuiltinFunc, RefValue, Value};
 
 trait BinOp {
     fn eval(&self, arg1: Value, arg2: Value) -> Result<Value, String>;
@@ -19,7 +19,7 @@ impl BuiltinFunc for Partial {
 
 impl<T: BinOp + Clone + 'static> BuiltinFunc for T {
     fn eval(&self, arg: Value) -> Result<Value, String> {
-        Ok(Value::new_builtin(Partial {
+        Ok(Value::builtin(Partial {
             binop: Rc::new(self.clone()),
             arg1: arg,
         }))
@@ -128,7 +128,10 @@ impl BuiltinFunc for IO {
             IO::Putc => {
                 let arg = arg.as_char()?;
                 print!("{}", arg);
-                Ok(Value::Data("Unit".to_string(), vec![]))
+                Ok(Value::RefValue(Rc::new(RefValue::Data(
+                    "Unit".to_string(),
+                    vec![],
+                ))))
             }
         }
     }

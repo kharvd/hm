@@ -5,7 +5,7 @@ use crate::{
     env::Env,
     pattern::try_pattern_match,
     typing::infer,
-    value::Value,
+    value::{RefValue, Value},
 };
 
 pub struct StatementEval {
@@ -80,7 +80,7 @@ impl Statement {
                     new_env = new_env
                         .extend_value(
                             &constructor_name,
-                            Value::Data(constructor_name.clone(), vec![]),
+                            Value::data(constructor_name.clone(), vec![]),
                         )
                         .extend_type(&constructor_name, constructor_type);
                 }
@@ -121,9 +121,9 @@ fn constructor_for_variant(
 impl Expr {
     fn eval(&self, env: &Env) -> Result<Value, String> {
         match self {
-            Expr::Int(i) => Ok(Value::Int(*i)),
-            Expr::Bool(b) => Ok(Value::Bool(*b)),
-            Expr::Char(c) => Ok(Value::Char(*c)),
+            Expr::Int(i) => Ok(Value::int(*i)),
+            Expr::Bool(b) => Ok(Value::bool(*b)),
+            Expr::Char(c) => Ok(Value::char(*c)),
             Expr::Ident(name) => {
                 let value = env.resolve_value(&name)?;
                 let Some(value) = value else {
@@ -139,11 +139,9 @@ impl Expr {
                     if_false.eval(env).clone()
                 }
             }
-            Expr::Lambda(param_name, body) => Ok(Value::Func {
-                param: param_name.clone(),
-                body: body.clone(),
-                closure: env.clone(),
-            }),
+            Expr::Lambda(param_name, body) => {
+                Ok(Value::func(param_name.clone(), body.clone(), env.clone()))
+            }
             Expr::Let(name, bound_expr, expr) => {
                 let bound_value = bound_expr.eval(env)?;
                 let inner_env = env.extend_value(&name, bound_value);
@@ -151,43 +149,29 @@ impl Expr {
             }
             Expr::Ap(func, arg) => {
                 let func_eval = func.eval(env)?;
-                match func_eval {
-                    Value::Func {
-                        param,
-                        body,
-                        closure,
-                    } => {
-                        let arg_eval = arg.eval(env)?;
-                        let inner_env = closure.extend_value(&param, arg_eval);
-                        body.eval(&inner_env)
-                    }
-                    Value::BuiltinFunc(f) => {
-                        let arg_eval = arg.eval(env)?;
-                        f.eval(arg_eval)
-                    }
-                    Value::Fix => {
-                        let arg_eval = arg.eval(env)?;
-                        match arg_eval {
-                            Value::Func {
-                                param,
-                                body,
-                                closure,
-                            } => {
-                                let fun = Rc::new(RefCell::new(None));
-                                let body_eval =
-                                    body.eval(&closure.extend_thunk(&param, fun.clone()))?;
-                                fun.replace(Some(body_eval.clone()));
-                                Ok(body_eval)
-                            }
-                            _ => Err(format!("Unexpected argument to fix: {}", arg)),
+                match &func_eval {
+                    Value::Fix => apply_fix(arg, env),
+                    Value::RefValue(ref_value) => match ref_value.borrow() {
+                        RefValue::Func {
+                            param,
+                            body,
+                            closure,
+                        } => {
+                            let arg_eval = arg.eval(env)?;
+                            let inner_env = closure.extend_value(&param, arg_eval);
+                            body.eval(&inner_env)
                         }
-                    }
-                    Value::Data(name, args) => {
-                        let arg_eval = arg.eval(env)?;
-                        let mut new_args = args.clone();
-                        new_args.push(Rc::new(arg_eval));
-                        Ok(Value::Data(name.clone(), new_args))
-                    }
+                        RefValue::BuiltinFunc(f) => {
+                            let arg_eval = arg.eval(env)?;
+                            f.eval(arg_eval)
+                        }
+                        RefValue::Data(name, args) => {
+                            let arg_eval = arg.eval(env)?;
+                            let mut new_args = args.clone();
+                            new_args.push(Rc::new(arg_eval));
+                            Ok(Value::data(name.clone(), new_args))
+                        }
+                    },
                     _ => Err(format!("Expected function, got {}", func_eval)),
                 }
             }
@@ -202,6 +186,23 @@ impl Expr {
                 Err(format!("No match for {}", eval_expr))
             }
         }
+    }
+}
+
+fn apply_fix(arg: &Rc<Expr>, env: &Env) -> Result<Value, String> {
+    let arg_eval = arg.eval(env)?.as_ref_value()?;
+    match arg_eval.borrow() {
+        RefValue::Func {
+            param,
+            body,
+            closure,
+        } => {
+            let fun = Rc::new(RefCell::new(None));
+            let body_eval = body.eval(&closure.extend_thunk(&param, fun.clone()))?;
+            fun.replace(Some(body_eval.clone()));
+            Ok(body_eval)
+        }
+        _ => Err(format!("Unexpected argument to fix: {}", arg)),
     }
 }
 
@@ -251,16 +252,12 @@ mod tests {
         assert_eq!(eval_env(&env, "true"), Value::Bool(true));
         assert_eq!(
             eval_env(&env, "fun x -> x"),
-            Value::Func {
-                param: "x".to_string(),
-                body: Rc::new(e_ident!("x")),
-                closure: env.clone(),
-            }
+            Value::func("x".to_string(), Rc::new(e_ident!("x")), env.clone(),)
         );
         assert_eq!(eval_env(&env, "a"), Value::Int(1));
         assert_eq!(
             eval_env(&env, "Negative"),
-            Value::Data("Negative".to_string(), vec![])
+            Value::data("Negative".to_string(), vec![])
         );
     }
 
@@ -318,15 +315,15 @@ mod tests {
 
         assert_eq!(
             eval_env(&env, "f 5"),
-            Value::Data("Positive".to_string(), vec![])
+            Value::data("Positive".to_string(), vec![])
         );
         assert_eq!(
             eval_env(&env, "f 0"),
-            Value::Data("Zero".to_string(), vec![])
+            Value::data("Zero".to_string(), vec![])
         );
         assert_eq!(
             eval_env(&env, "f (neg 5)"),
-            Value::Data("Negative".to_string(), vec![])
+            Value::data("Negative".to_string(), vec![])
         );
     }
 
@@ -339,15 +336,15 @@ mod tests {
 
         assert_eq!(
             eval_env(&env, "l"),
-            Value::Data(
+            Value::data(
                 "Cons".to_string(),
                 vec![
                     Rc::new(Value::Int(1)),
-                    Rc::new(Value::Data(
+                    Rc::new(Value::data(
                         "Cons".to_string(),
                         vec![
                             Rc::new(Value::Int(2)),
-                            Rc::new(Value::Data("Nil".to_string(), vec![]))
+                            Rc::new(Value::data("Nil".to_string(), vec![]))
                         ]
                     ))
                 ]

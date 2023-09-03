@@ -1,4 +1,10 @@
-use crate::{ast::ExprPattern, env::Env, value::Value};
+use std::borrow::Borrow;
+
+use crate::{
+    ast::ExprPattern,
+    env::Env,
+    value::{RefValue, Value},
+};
 
 pub fn try_pattern_match(
     env: &Env,
@@ -10,22 +16,30 @@ pub fn try_pattern_match(
         (Value::Bool(b), ExprPattern::Bool(c)) if b == c => Some(env.clone()),
         (Value::Char(c), ExprPattern::Char(d)) if c == d => Some(env.clone()),
         (_, ExprPattern::Wildcard) => Some(env.clone()),
-        (Value::Data(name, args), ExprPattern::Constructor(constructor_name, constructor_args)) => {
-            if name == constructor_name && args.len() == constructor_args.len() {
-                let mut new_env = env.clone();
-                for (arg, pattern_arg) in args.iter().zip(constructor_args.iter()) {
-                    if let Some(bound_env) = try_pattern_match(&new_env, arg, pattern_arg) {
-                        new_env = bound_env;
+        (v, ExprPattern::Variable(name2)) => Some(env.extend_value(&name2, v.clone())),
+        (Value::RefValue(ref_value), choice_pattern) => {
+            match (ref_value.borrow(), choice_pattern) {
+                (
+                    RefValue::Data(name, args),
+                    ExprPattern::Constructor(constructor_name, constructor_args),
+                ) => {
+                    if name == constructor_name && args.len() == constructor_args.len() {
+                        let mut new_env = env.clone();
+                        for (arg, pattern_arg) in args.iter().zip(constructor_args.iter()) {
+                            if let Some(bound_env) = try_pattern_match(&new_env, arg, pattern_arg) {
+                                new_env = bound_env;
+                            } else {
+                                return None;
+                            }
+                        }
+                        Some(new_env)
                     } else {
-                        return None;
+                        None
                     }
                 }
-                Some(new_env)
-            } else {
-                None
+                _ => None,
             }
         }
-        (v, ExprPattern::Variable(name2)) => Some(env.extend_value(&name2, v.clone())),
         _ => None,
     }
 }
@@ -65,7 +79,7 @@ mod tests {
         let env = Env::new();
         let res = try_pattern_match(
             &env,
-            &Value::Data("True".to_string(), vec![]),
+            &Value::data("True".to_string(), vec![]),
             &p_constructor!("True"),
         );
         assert_eq!(res, Some(env));
@@ -76,7 +90,7 @@ mod tests {
         let env = Env::new();
         let res = try_pattern_match(
             &env,
-            &Value::Data(
+            &Value::data(
                 "Pair".to_string(),
                 vec![Rc::new(Value::Int(1)), Rc::new(Value::Bool(true))],
             ),
@@ -96,11 +110,11 @@ mod tests {
         let env = Env::new();
         let res = try_pattern_match(
             &env,
-            &Value::Data(
+            &Value::data(
                 "Pair".to_string(),
                 vec![
                     Rc::new(Value::Int(1)),
-                    Rc::new(Value::Data(
+                    Rc::new(Value::data(
                         "Pair".to_string(),
                         vec![Rc::new(Value::Bool(true)), Rc::new(Value::Int(2))],
                     )),
