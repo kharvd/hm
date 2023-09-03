@@ -8,6 +8,7 @@ pub fn try_pattern_match(
     match (eval_expr, choice_pattern) {
         (Value::Int(i), ExprPattern::Int(j)) if i == j => Some(env.clone()),
         (Value::Bool(b), ExprPattern::Bool(c)) if b == c => Some(env.clone()),
+        (Value::Char(c), ExprPattern::Char(d)) if c == d => Some(env.clone()),
         (_, ExprPattern::Wildcard) => Some(env.clone()),
         (Value::Data(name, args), ExprPattern::Constructor(constructor_name, constructor_args)) => {
             if name == constructor_name && args.len() == constructor_args.len() {

@@ -232,6 +232,13 @@ fn infer_constraints_for_pattern(
             },
             bindings: Vec::new(),
         },
+        ExprPattern::Char(_) => PatternBindings {
+            inference: Inference {
+                inferred_type: TypeExpr::Char,
+                constraints: Vec::new(),
+            },
+            bindings: Vec::new(),
+        },
         ExprPattern::Wildcard => {
             let type_var = allocate_type_var(type_var_counter);
             PatternBindings {

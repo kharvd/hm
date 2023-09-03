@@ -7,6 +7,7 @@ use rpds::{List, RedBlackTreeSet};
 pub enum ExprPattern {
     Int(i64),
     Bool(bool),
+    Char(char),
     Variable(String),
     Wildcard,
     Constructor(String, Vec<Rc<ExprPattern>>),
@@ -17,6 +18,7 @@ impl Display for ExprPattern {
         match self {
             ExprPattern::Int(n) => write!(f, "{}", n),
             ExprPattern::Bool(b) => write!(f, "{}", b),
+            ExprPattern::Char(c) => write!(f, "{}", c),
             ExprPattern::Variable(s) => write!(f, "{}", s),
             ExprPattern::Wildcard => write!(f, "_"),
             ExprPattern::Constructor(name, args) => {

@@ -541,6 +541,7 @@ fn parse_non_constructor_pattern(
         Some(Token::Variable(name)) => ExprPattern::Variable(name),
         Some(Token::Constructor(name)) => ExprPattern::Constructor(name, vec![]),
         Some(Token::Int(i)) => ExprPattern::Int(i),
+        Some(Token::Char(c)) => ExprPattern::Char(c),
         Some(Token::Keyword(Keyword::True)) => ExprPattern::Bool(true),
         Some(Token::Keyword(Keyword::False)) => ExprPattern::Bool(false),
         Some(Token::LParen) => parse_parenthesized_pattern(tokens)?,
