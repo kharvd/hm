@@ -18,6 +18,7 @@ pub enum Keyword {
     False,
     Bool,
     Int,
+    Char,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -60,6 +61,7 @@ pub enum Token {
     Variable(String),
     Constructor(String),
     Int(i64),
+    Char(char),
     Keyword(Keyword),
     LParen,
     RParen,
@@ -68,7 +70,6 @@ pub enum Token {
     Comma,
     Arrow,
     Colon,
-    Apostrophe,
     Equals,
     Dot,
     Pipe,
@@ -109,6 +110,7 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, String> {
                     "false" => tokens.push(Token::Keyword(Keyword::False)),
                     "bool" => tokens.push(Token::Keyword(Keyword::Bool)),
                     "int" => tokens.push(Token::Keyword(Keyword::Int)),
+                    "char" => tokens.push(Token::Keyword(Keyword::Char)),
                     s => {
                         if s.starts_with(char::is_uppercase) {
                             tokens.push(Token::Constructor(ident))
@@ -154,8 +156,28 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, String> {
                 chars.next();
             }
             '\'' => {
-                tokens.push(Token::Apostrophe);
+                // parse char, handling escape sequences
                 chars.next();
+
+                let c = match chars.next() {
+                    Some('\\') => match chars.next() {
+                        Some('n') => '\n',
+                        Some('t') => '\t',
+                        Some('r') => '\r',
+                        Some('\\') => '\\',
+                        Some('\'') => '\'',
+                        Some(c) => return Err(format!("Invalid escape sequence '\\{}'", c)),
+                        None => return Err("Unexpected end of input".to_string()),
+                    },
+                    Some(c) => c,
+                    None => return Err("Unexpected end of input".to_string()),
+                };
+
+                if let Some('\'') = chars.next() {
+                    tokens.push(Token::Char(c));
+                } else {
+                    return Err("Expected closing apostrophe".to_string());
+                }
             }
             '-' => {
                 chars.next();
@@ -274,9 +296,8 @@ mod tests {
             ])
         );
         assert_eq!(
-            tokenize("'x : int"),
+            tokenize("x : int"),
             Ok(vec![
-                Token::Apostrophe,
                 Token::Variable("x".to_string()),
                 Token::Colon,
                 Token::Keyword(Keyword::Int),
@@ -365,6 +386,23 @@ mod tests {
                 Token::InfixOp(InfixOp::NotEquals),
                 Token::Int(1),
                 Token::RParen,
+            ])
+        );
+
+        assert_eq!(
+            tokenize("'a', '\\n', '\\t', '\\r', '\\\\', '\\''"),
+            Ok(vec![
+                Token::Char('a'),
+                Token::Comma,
+                Token::Char('\n'),
+                Token::Comma,
+                Token::Char('\t'),
+                Token::Comma,
+                Token::Char('\r'),
+                Token::Comma,
+                Token::Char('\\'),
+                Token::Comma,
+                Token::Char('\''),
             ])
         );
     }

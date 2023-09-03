@@ -220,6 +220,7 @@ fn parse_non_arrow_type_expr(
         Some(Token::Constructor(name)) => parse_type_constructor(name, tokens)?,
         Some(Token::Keyword(Keyword::Int)) => TypeExpr::Int,
         Some(Token::Keyword(Keyword::Bool)) => TypeExpr::Bool,
+        Some(Token::Keyword(Keyword::Char)) => TypeExpr::Char,
         Some(Token::LParen) => {
             let ty = parse_arrow_type_expr(tokens)?;
             match tokens.next() {
@@ -333,6 +334,7 @@ fn parse_primary(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<E
         Some(Token::InfixOp(op)) => Expr::Ident(op.to_string().to_string()),
         Some(Token::Constructor(name)) => Expr::Ident(name),
         Some(Token::Int(i)) => Expr::Int(i),
+        Some(Token::Char(c)) => Expr::Char(c),
         Some(Token::Keyword(Keyword::True)) => Expr::Bool(true),
         Some(Token::Keyword(Keyword::False)) => Expr::Bool(false),
         Some(Token::Keyword(Keyword::If)) => parse_if_expr(tokens)?,

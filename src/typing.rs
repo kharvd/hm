@@ -490,7 +490,9 @@ impl Reduction {
 
 fn reduce(constraint: Constraint) -> Result<Reduction, String> {
     match (constraint.lhs, constraint.rhs) {
-        (TypeExpr::Int, TypeExpr::Int) | (TypeExpr::Bool, TypeExpr::Bool) => Ok(Reduction::empty()),
+        (TypeExpr::Int, TypeExpr::Int)
+        | (TypeExpr::Bool, TypeExpr::Bool)
+        | (TypeExpr::Char, TypeExpr::Char) => Ok(Reduction::empty()),
         (TypeExpr::TypeVar(x), TypeExpr::TypeVar(y)) => {
             if x == y {
                 Ok(Reduction::empty())
