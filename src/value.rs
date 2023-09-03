@@ -3,6 +3,8 @@ use std::{
     rc::Rc,
 };
 
+use itertools::Itertools;
+
 use crate::{ast::Expr, env::Env};
 
 pub trait BuiltinFunc {
@@ -109,7 +111,11 @@ impl Display for Value {
             Value::BuiltinFunc(_) => write!(f, "<builtin>"),
             Value::Fix => write!(f, "fix"),
             Value::Data(name, args) => {
-                if args.is_empty() {
+                if name == "Cons" || name == "Nil" {
+                    write_list(f, name, args)
+                } else if name.starts_with("Tuple") {
+                    write_tuple(f, args)
+                } else if args.is_empty() {
                     write!(f, "{}", name)
                 } else {
                     write!(
@@ -125,6 +131,43 @@ impl Display for Value {
             }
         }
     }
+}
+
+fn write_list(
+    f: &mut std::fmt::Formatter,
+    name: &String,
+    args: &Vec<Value>,
+) -> Result<(), std::fmt::Error> {
+    let mut name = name;
+    let mut args = args;
+    write!(f, "[")?;
+
+    loop {
+        match name.as_str() {
+            "Nil" => {
+                write!(f, "]")?;
+                return Ok(());
+            }
+            "Cons" => {
+                write!(f, "{}", args[0])?;
+                match &args[1] {
+                    Value::Data(name2, args2) => {
+                        name = name2;
+                        args = args2;
+                        if name2 == "Cons" {
+                            write!(f, ", ")?;
+                        }
+                    }
+                    _ => Err(std::fmt::Error)?,
+                }
+            }
+            _ => Err(std::fmt::Error)?,
+        }
+    }
+}
+
+fn write_tuple(f: &mut std::fmt::Formatter, args: &[Value]) -> Result<(), std::fmt::Error> {
+    write!(f, "({})", args.into_iter().join(", "))
 }
 
 impl Value {
