@@ -19,7 +19,7 @@ pub enum RefValue {
         closure: Env,
     },
     BuiltinFunc(Rc<dyn BuiltinFunc>),
-    Data(String, Vec<Rc<Value>>),
+    Data(String, Vec<Value>),
 }
 
 impl PartialEq for RefValue {
@@ -60,7 +60,7 @@ impl Debug for RefValue {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug, Clone)]
 pub enum Value {
     Int(i64),
     Bool(bool),
@@ -104,7 +104,7 @@ impl Display for Value {
     }
 }
 
-fn extract_list(name: &String, args: &Vec<Rc<Value>>) -> Result<Vec<Rc<Value>>, String> {
+fn extract_list(name: &String, args: &Vec<Value>) -> Result<Vec<Value>, String> {
     let mut name = name;
     let mut args = args;
 
@@ -115,8 +115,8 @@ fn extract_list(name: &String, args: &Vec<Rc<Value>>) -> Result<Vec<Rc<Value>>, 
             "Nil" => break,
             "Cons" => {
                 res.push(args[0].clone());
-                match args[1].borrow() {
-                    Value::RefValue(refvalue) => match refvalue.borrow() {
+                match &args[1] {
+                    Value::RefValue(ref_value) => match ref_value.borrow() {
                         RefValue::Data(name2, args2) => {
                             name = name2;
                             args = args2;
@@ -136,7 +136,7 @@ fn extract_list(name: &String, args: &Vec<Rc<Value>>) -> Result<Vec<Rc<Value>>, 
 fn write_list(
     f: &mut std::fmt::Formatter,
     name: &String,
-    args: &Vec<Rc<Value>>,
+    args: &Vec<Value>,
 ) -> Result<(), std::fmt::Error> {
     let name = name;
     let args = args;
@@ -159,7 +159,7 @@ fn write_list(
 fn write_string(
     f: &mut std::fmt::Formatter,
     name: &String,
-    args: &Vec<Rc<Value>>,
+    args: &Vec<Value>,
 ) -> Result<(), std::fmt::Error> {
     let vals = extract_list(name, args).map_err(|_| std::fmt::Error)?;
 
@@ -180,7 +180,7 @@ fn write_string(
     Ok(())
 }
 
-fn write_tuple(f: &mut std::fmt::Formatter, args: &Vec<Rc<Value>>) -> Result<(), std::fmt::Error> {
+fn write_tuple(f: &mut std::fmt::Formatter, args: &Vec<Value>) -> Result<(), std::fmt::Error> {
     write!(f, "({})", args.into_iter().join(", "))
 }
 
@@ -211,7 +211,7 @@ impl Value {
         Value::RefValue(Rc::new(RefValue::BuiltinFunc(Rc::new(f))))
     }
 
-    pub fn data(name: String, args: Vec<Rc<Value>>) -> Self {
+    pub fn data(name: String, args: Vec<Value>) -> Self {
         // println!("allocating data");
         Value::RefValue(Rc::new(RefValue::Data(name, args)))
     }

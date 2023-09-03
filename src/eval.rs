@@ -134,9 +134,9 @@ impl Expr {
             Expr::If(cond, if_true, if_false) => {
                 let cond = cond.eval(env)?;
                 if cond.as_bool()? {
-                    if_true.eval(env).clone()
+                    if_true.eval(env)
                 } else {
-                    if_false.eval(env).clone()
+                    if_false.eval(env)
                 }
             }
             Expr::Lambda(param_name, body) => {
@@ -168,7 +168,7 @@ impl Expr {
                         RefValue::Data(name, args) => {
                             let arg_eval = arg.eval(env)?;
                             let mut new_args = args.clone();
-                            new_args.push(Rc::new(arg_eval));
+                            new_args.push(arg_eval);
                             Ok(Value::data(name.clone(), new_args))
                         }
                     },
@@ -339,14 +339,11 @@ mod tests {
             Value::data(
                 "Cons".to_string(),
                 vec![
-                    Rc::new(Value::Int(1)),
-                    Rc::new(Value::data(
+                    Value::Int(1),
+                    Value::data(
                         "Cons".to_string(),
-                        vec![
-                            Rc::new(Value::Int(2)),
-                            Rc::new(Value::data("Nil".to_string(), vec![]))
-                        ]
-                    ))
+                        vec![Value::Int(2), Value::data("Nil".to_string(), vec![])]
+                    )
                 ]
             )
         );

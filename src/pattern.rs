@@ -90,10 +90,7 @@ mod tests {
         let env = Env::new();
         let res = try_pattern_match(
             &env,
-            &Value::data(
-                "Pair".to_string(),
-                vec![Rc::new(Value::Int(1)), Rc::new(Value::Bool(true))],
-            ),
+            &Value::data("Pair".to_string(), vec![Value::Int(1), Value::Bool(true)]),
             &p_constructor!("Pair", p_var!("x"), p_var!("y")),
         );
         assert_eq!(
@@ -113,11 +110,8 @@ mod tests {
             &Value::data(
                 "Pair".to_string(),
                 vec![
-                    Rc::new(Value::Int(1)),
-                    Rc::new(Value::data(
-                        "Pair".to_string(),
-                        vec![Rc::new(Value::Bool(true)), Rc::new(Value::Int(2))],
-                    )),
+                    Value::Int(1),
+                    Value::data("Pair".to_string(), vec![Value::Bool(true), Value::Int(2)]),
                 ],
             ),
             &p_constructor!(
