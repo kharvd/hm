@@ -42,6 +42,7 @@ impl Display for ExprPattern {
 pub enum Expr {
     Int(i64),
     Bool(bool),
+    Char(char),
     Ident(String),
     If(Rc<Expr>, Rc<Expr>, Rc<Expr>),
     Let(String, Rc<Expr>, Rc<Expr>),
@@ -55,6 +56,7 @@ impl Display for Expr {
         match self {
             Expr::Int(n) => write!(f, "{}", n),
             Expr::Bool(b) => write!(f, "{}", b),
+            Expr::Char(c) => write!(f, "\'{}\'", c),
             Expr::Ident(s) => write!(f, "{}", s),
             Expr::If(cond, then, else_) => {
                 write!(f, "(if {} then {} else {})", cond, then, else_)
@@ -80,6 +82,7 @@ impl Display for Expr {
 pub enum TypeExpr {
     Int,
     Bool,
+    Char,
     Fun(Rc<TypeExpr>, Rc<TypeExpr>),
     TypeVar(String),
     Forall(RedBlackTreeSet<String>, Rc<TypeExpr>),
@@ -131,8 +134,9 @@ impl Display for TypeExpr {
         match self {
             TypeExpr::Int => write!(f, "int"),
             TypeExpr::Bool => write!(f, "bool"),
+            TypeExpr::Char => write!(f, "char"),
             TypeExpr::Fun(param, body) => write!(f, "({} -> {})", param, body),
-            TypeExpr::TypeVar(s) => write!(f, "'{}", s),
+            TypeExpr::TypeVar(s) => write!(f, "{}", s),
             TypeExpr::Forall(vars, ty) => {
                 if vars.is_empty() {
                     write!(f, "{}", ty)
@@ -140,7 +144,7 @@ impl Display for TypeExpr {
                     write!(
                         f,
                         "forall {} . {}",
-                        vars.into_iter().map(|v| format!("'{}", v)).join(" "),
+                        vars.into_iter().map(|v| format!("{}", v)).join(" "),
                         ty
                     )
                 }
@@ -183,7 +187,7 @@ impl Display for Statement {
                     f,
                     "data {} {} = {}",
                     name,
-                    args.iter().map(|arg| format!("'{}", arg)).join(" "),
+                    args.iter().map(|arg| format!("{}", arg)).join(" "),
                     variants.iter().join(" | ")
                 )
             }
@@ -221,7 +225,7 @@ mod tests {
     #[test]
     fn display_type_expr() {
         let ty = t_fun!(t_fun!(t_int!(), t_type_var!("a")), t_bool!());
-        assert_eq!(format!("{}", ty), "((int -> 'a) -> bool)");
+        assert_eq!(format!("{}", ty), "((int -> a) -> bool)");
     }
 
     #[test]
@@ -239,7 +243,7 @@ mod tests {
             "f".to_string(),
             Rc::new(t_fun!(t_type_var!("a"), t_type_var!("a"))),
         );
-        assert_eq!(format!("{}", stmt), "val f : ('a -> 'a)");
+        assert_eq!(format!("{}", stmt), "val f : (a -> a)");
     }
 
     #[test]

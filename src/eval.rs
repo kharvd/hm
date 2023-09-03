@@ -123,6 +123,7 @@ impl Expr {
         match self {
             Expr::Int(i) => Ok(Value::Int(*i)),
             Expr::Bool(b) => Ok(Value::Bool(*b)),
+            Expr::Char(c) => Ok(Value::Char(*c)),
             Expr::Ident(name) => {
                 let value = env.resolve_value(&name)?;
                 Ok(value.clone())
@@ -343,7 +344,7 @@ mod tests {
     #[test]
     fn eval_parameterized_data() {
         let env = eval_file(
-            "data List 'a = Nil | Cons 'a (List 'a)
+            "data List a = Nil | Cons a (List a)
             let l = Cons 1 (Cons 2 Nil)",
         );
 
@@ -381,7 +382,7 @@ mod tests {
     #[test]
     fn match_pair() {
         let env = eval_file(
-            "data Pair 'a 'b = Pair 'a 'b
+            "data Pair a b = Pair a b
             let f = fun x ->
                 match x with
                 | Pair a b -> a + b",
@@ -393,7 +394,7 @@ mod tests {
     #[test]
     fn match_list() {
         let env = eval_file(
-            "data List 'a = Nil | Cons 'a (List 'a)
+            "data List a = Nil | Cons a (List a)
             let rec len = fun l ->
                 match l with
                 | Nil -> 0

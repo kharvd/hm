@@ -77,13 +77,6 @@ fn parse_let_statement(
     }
 }
 
-fn parse_type_var(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<String, String> {
-    match tokens.next() {
-        Some(Token::Variable(name)) => Ok(name),
-        _ => Err("Expected identifier after apostrophe".to_string()),
-    }
-}
-
 fn parse_data_statement(
     tokens: &mut Peekable<impl Iterator<Item = Token>>,
 ) -> Result<Statement, String> {
@@ -96,9 +89,10 @@ fn parse_data_statement(
     let mut args = Vec::new();
     loop {
         match tokens.peek() {
-            Some(Token::Apostrophe) => {
-                tokens.next();
-                let var_name = parse_type_var(tokens)?;
+            Some(Token::Variable(_)) => {
+                let Some(Token::Variable(var_name)) = tokens.next() else {
+                    panic!("Expected variable name");
+                };
                 args.push(var_name);
             }
             _ => break,
@@ -192,12 +186,11 @@ fn parse_forall_type_expr(
     let mut vars = RedBlackTreeSet::new();
     loop {
         match tokens.next() {
-            Some(Token::Apostrophe) => {
-                let var_name = parse_type_var(tokens)?;
+            Some(Token::Variable(var_name)) => {
                 vars = vars.insert(var_name);
             }
             Some(Token::Dot) => break,
-            t => return Err(format!("Expected apostrophe or dot, but got {:?}", t)),
+            t => return Err(format!("Expected variable or dot, but got {:?}", t)),
         }
     }
 
@@ -209,7 +202,7 @@ fn parse_forall_type_expr(
 pub fn parse_arrow_type_expr(
     tokens: &mut Peekable<impl Iterator<Item = Token>>,
 ) -> Result<TypeExpr, String> {
-    let mut ty = parse_non_arrow_expr(tokens)?;
+    let mut ty = parse_non_arrow_type_expr(tokens)?;
 
     if let Some(Token::Arrow) = tokens.peek() {
         tokens.next();
@@ -219,11 +212,11 @@ pub fn parse_arrow_type_expr(
     Ok(ty)
 }
 
-fn parse_non_arrow_expr(
+fn parse_non_arrow_type_expr(
     tokens: &mut Peekable<impl Iterator<Item = Token>>,
 ) -> Result<TypeExpr, String> {
     let ty = match tokens.next() {
-        Some(Token::Apostrophe) => TypeExpr::TypeVar(parse_type_var(tokens)?),
+        Some(Token::Variable(name)) => TypeExpr::TypeVar(name),
         Some(Token::Constructor(name)) => parse_type_constructor(name, tokens)?,
         Some(Token::Keyword(Keyword::Int)) => TypeExpr::Int,
         Some(Token::Keyword(Keyword::Bool)) => TypeExpr::Bool,
@@ -247,12 +240,12 @@ fn parse_type_constructor(
     let mut args = Vec::new();
     loop {
         match tokens.peek() {
-            Some(Token::Apostrophe)
-            | Some(Token::LParen)
+            Some(Token::LParen)
+            | Some(Token::Variable(_))
             | Some(Token::Constructor(_))
             | Some(Token::Keyword(Keyword::Bool))
             | Some(Token::Keyword(Keyword::Int)) => {
-                let arg = Rc::new(parse_non_arrow_expr(tokens)?);
+                let arg = Rc::new(parse_non_arrow_type_expr(tokens)?);
                 args.push(arg);
             }
             _ => break,
@@ -334,28 +327,6 @@ fn make_infix_op(op: InfixOp, lhs: Expr, rhs: Expr) -> Expr {
     )
 }
 
-// fn parse_expr(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<Expr, String> {
-//     let mut expr = parse_non_ap_expr(tokens)?;
-
-//     while let Some(next) = tokens.peek() {
-//         match next {
-//             Token::LParen
-//             | Token::LBracket
-//             | Token::Variable(_)
-//             | Token::Constructor(_)
-//             | Token::Int(_)
-//             | Token::Underscore
-//             | Token::Keyword(Keyword::True)
-//             | Token::Keyword(Keyword::False) => {
-//                 expr = Expr::Ap(Rc::new(expr), Rc::new(parse_non_ap_expr(tokens)?));
-//             }
-//             _ => break,
-//         }
-//     }
-
-//     Ok(expr)
-// }
-
 fn parse_primary(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<Expr, String> {
     Ok(match tokens.next() {
         Some(Token::Variable(name)) => Expr::Ident(name),
@@ -373,25 +344,6 @@ fn parse_primary(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<E
         t => return Err(format!("Expected expression, got {:?}", t)),
     })
 }
-
-// fn parse_non_ap_expr(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<Expr, String> {
-//     let expr = match tokens.next() {
-//         Some(Token::Variable(name)) => Expr::Ident(name),
-//         Some(Token::Constructor(name)) => Expr::Ident(name),
-//         Some(Token::Int(i)) => Expr::Int(i),
-//         Some(Token::Keyword(Keyword::True)) => Expr::Bool(true),
-//         Some(Token::Keyword(Keyword::False)) => Expr::Bool(false),
-//         Some(Token::Keyword(Keyword::If)) => parse_if_expr(tokens)?,
-//         Some(Token::Keyword(Keyword::Fun)) => parse_lambda_expr(tokens)?,
-//         Some(Token::Keyword(Keyword::Let)) => parse_let_expr(tokens)?,
-//         Some(Token::Keyword(Keyword::Match)) => parse_match_expr(tokens)?,
-//         Some(Token::LParen) => parse_parenthesized_expr(tokens)?,
-//         Some(Token::LBracket) => parse_list(tokens)?,
-//         t => return Err(format!("Expected expression, got {:?}", t)),
-//     };
-
-//     Ok(expr)
-// }
 
 fn parse_parenthesized_expr(
     tokens: &mut Peekable<impl Iterator<Item = Token>>,
@@ -683,7 +635,7 @@ mod tests {
 
     #[test]
     fn test_type_constructor_args() {
-        let tokens = lexer::tokenize("int -> MyType 'a (MyOtherType -> 'b) -> bool").unwrap();
+        let tokens = lexer::tokenize("int -> MyType a (MyOtherType -> b) -> bool").unwrap();
         let mut iter = tokens.into_iter().peekable();
 
         assert_eq!(
@@ -715,7 +667,7 @@ mod tests {
 
     #[test]
     fn test_type_var() {
-        let tokens = lexer::tokenize("('a -> 'b) -> 'a").unwrap();
+        let tokens = lexer::tokenize("(a -> b) -> a").unwrap();
         let mut iter = tokens.into_iter().peekable();
 
         assert_eq!(
@@ -790,7 +742,7 @@ mod tests {
 
     #[test]
     fn test_type_scheme() {
-        let tokens = lexer::tokenize("forall 'a 'b . 'a -> 'b").unwrap();
+        let tokens = lexer::tokenize("forall a b . a -> b").unwrap();
         let mut iter = tokens.into_iter().peekable();
 
         assert_eq!(
@@ -823,7 +775,7 @@ mod tests {
 
     #[test]
     fn test_data_with_args() {
-        let tokens = lexer::tokenize("data MyType 'a 'b = A | BB 'a bool | Ccc 'b").unwrap();
+        let tokens = lexer::tokenize("data MyType a b = A | BB a bool | Ccc b").unwrap();
         let mut iter = tokens.into_iter().peekable();
 
         assert_eq!(

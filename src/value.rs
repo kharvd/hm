@@ -15,6 +15,7 @@ pub trait BuiltinFunc {
 pub enum Value {
     Int(i64),
     Bool(bool),
+    Char(char),
     Func {
         param: String,
         body: Rc<Expr>,
@@ -35,6 +36,7 @@ impl PartialEq for Value {
         match (self, other) {
             (Self::Int(l0), Self::Int(r0)) => l0 == r0,
             (Self::Bool(l0), Self::Bool(r0)) => l0 == r0,
+            (Self::Char(l0), Self::Char(r0)) => l0 == r0,
             (
                 Self::Func {
                     param: l_param,
@@ -74,6 +76,7 @@ impl Debug for Value {
         match self {
             Self::Int(arg0) => f.debug_tuple("Int").field(arg0).finish(),
             Self::Bool(arg0) => f.debug_tuple("Bool").field(arg0).finish(),
+            Self::Char(arg0) => f.debug_tuple("Char").field(arg0).finish(),
             Self::Func {
                 param,
                 body,
@@ -106,6 +109,7 @@ impl Display for Value {
         match self {
             Value::Int(n) => write!(f, "{}", n),
             Value::Bool(b) => write!(f, "{}", b),
+            Value::Char(c) => write!(f, "\'{}\'", c),
             Value::Func { param, body, .. } => write!(f, "(fun {} -> {})", param, body),
             Value::RecFunc { name, body, .. } => write!(f, "(let rec {} = {})", name, body),
             Value::BuiltinFunc(_) => write!(f, "<builtin>"),

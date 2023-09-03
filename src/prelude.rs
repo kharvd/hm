@@ -38,20 +38,20 @@ impl Env {
             val (||) : bool -> bool -> bool
             val xor : bool -> bool -> bool
 
-            val fix : ('a -> 'a) -> 'a
+            val fix : (a -> a) -> a
             let (==) = fun x -> fun y -> (x <= y) && (x >= y)
                 
             data Unit = Unit
-            data Tuple1 'a = Tuple1 'a
-            data Tuple2 'a 'b = Tuple2 'a 'b
-            data Tuple3 'a 'b 'c = Tuple3 'a 'b 'c
-            data Tuple4 'a 'b 'c 'd = Tuple4 'a 'b 'c 'd
-            data Tuple5 'a 'b 'c 'd 'e = Tuple5 'a 'b 'c 'd 'e
-            data Tuple6 'a 'b 'c 'd 'e 'f = Tuple6 'a 'b 'c 'd 'e 'f
-            data Tuple7 'a 'b 'c 'd 'e 'f 'g = Tuple7 'a 'b 'c 'd 'e 'f 'g
-            data Tuple8 'a 'b 'c 'd 'e 'f 'g 'h = Tuple8 'a 'b 'c 'd 'e 'f 'g 'h
-            data Tuple9 'a 'b 'c 'd 'e 'f 'g 'h 'i = Tuple9 'a 'b 'c 'd 'e 'f 'g 'h 'i
-            data Tuple10 'a 'b 'c 'd 'e 'f 'g 'h 'i 'j = Tuple10 'a 'b 'c 'd 'e 'f 'g 'h 'i 'j
+            data Tuple1 a = Tuple1 a
+            data Tuple2 a b = Tuple2 a b
+            data Tuple3 a b c = Tuple3 a b c
+            data Tuple4 a b c d = Tuple4 a b c d
+            data Tuple5 a b c d e = Tuple5 a b c d e
+            data Tuple6 a b c d e f = Tuple6 a b c d e f
+            data Tuple7 a b c d e f g = Tuple7 a b c d e f g
+            data Tuple8 a b c d e f g h = Tuple8 a b c d e f g h
+            data Tuple9 a b c d e f g h i = Tuple9 a b c d e f g h i
+            data Tuple10 a b c d e f g h i j = Tuple10 a b c d e f g h i j
 
             let fst = fun p -> 
                 match p with 
@@ -61,7 +61,7 @@ impl Env {
                 match p with
                 | (_, y) -> y
 
-            data List 'a = Nil | Cons 'a (List 'a)
+            data List a = Nil | Cons a (List a)
             let nil = Nil
             let cons = fun x -> fun xs -> Cons x xs
             let rec len = fun xs -> 

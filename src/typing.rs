@@ -79,6 +79,10 @@ fn infer_constraints_inner(
             inferred_type: TypeExpr::Bool,
             constraints: Vec::new(),
         },
+        Expr::Char(_) => Inference {
+            inferred_type: TypeExpr::Char,
+            constraints: Vec::new(),
+        },
         Expr::Ident(name) => {
             let type_var = allocate_type_var(type_var_counter);
             let ident_type = env.resolve_type(name)?;
@@ -348,8 +352,7 @@ fn substitute(t: &TypeExpr, substitutions: &Vec<Substitution>) -> TypeExpr {
 impl TypeExpr {
     fn is_free(&self, name: &str) -> bool {
         match self {
-            TypeExpr::Int => true,
-            TypeExpr::Bool => true,
+            TypeExpr::Int | TypeExpr::Bool | TypeExpr::Char => true,
             TypeExpr::Constructor(_, args) => args.iter().all(|arg| arg.is_free(name)),
             TypeExpr::Fun(t1, t2) => t1.is_free(name) && t2.is_free(name),
             TypeExpr::TypeVar(other_name) => name != other_name,
@@ -365,7 +368,7 @@ impl TypeExpr {
 
     fn substitute(&self, sub: &Substitution) -> Self {
         match self {
-            TypeExpr::Int | TypeExpr::Bool => self.clone(),
+            TypeExpr::Int | TypeExpr::Bool | TypeExpr::Char => self.clone(),
             TypeExpr::Constructor(name, args) => {
                 TypeExpr::constructor(name, args.iter().map(|arg| arg.substitute(sub)).collect())
             }
@@ -389,7 +392,7 @@ impl TypeExpr {
 
     pub fn free_variables(&self) -> RedBlackTreeSet<String> {
         match self {
-            TypeExpr::Int | TypeExpr::Bool => RedBlackTreeSet::new(),
+            TypeExpr::Int | TypeExpr::Bool | TypeExpr::Char => RedBlackTreeSet::new(),
             TypeExpr::Constructor(_, args) => {
                 let mut vars = RedBlackTreeSet::new();
                 for arg in args.iter() {
@@ -571,11 +574,11 @@ mod tests {
         let mut env = Env::prelude();
         env = env.eval_file("let id = fun x -> x").unwrap();
 
-        assert_type!(&env, "id", "forall 'a. 'a -> 'a");
+        assert_type!(&env, "id", "forall a. a -> a");
         assert_type!(&env, "id 5", "int");
         assert_type!(&env, "id neg", "int -> int");
-        assert_type!(&env, "fun x -> id x", "forall 'a. 'a -> 'a");
-        assert_type!(&env, "fun x -> id (id x)", "forall 'a. 'a -> 'a");
+        assert_type!(&env, "fun x -> id x", "forall a. a -> a");
+        assert_type!(&env, "fun x -> id (id x)", "forall a. a -> a");
     }
 
     #[test]
@@ -597,7 +600,7 @@ mod tests {
     #[test]
     fn test_let() {
         let env = Env::prelude();
-        assert_type!(&env, "(let f = fun x -> x in f)", "forall 'a. 'a -> 'a");
+        assert_type!(&env, "(let f = fun x -> x in f)", "forall a. a -> a");
         assert_type!(&env, "(let f = fun x -> x in f 5)", "int");
         assert_type!(&env, "(let f = fun x -> x in f neg)", "int -> int");
         assert_type!(
@@ -611,12 +614,12 @@ mod tests {
     fn test_fun() {
         let env = Env::prelude();
 
-        assert_type!(&env, "fun x -> fun y -> x", "forall 'a 'b. 'a -> 'b -> 'a");
-        assert_type!(&env, "fun x -> fun y -> y", "forall 'a 'b. 'a -> 'b -> 'b");
+        assert_type!(&env, "fun x -> fun y -> x", "forall a b. a -> b -> a");
+        assert_type!(&env, "fun x -> fun y -> y", "forall a b. a -> b -> b");
         assert_type!(
             &env,
             "(let g = fun x -> fun y -> fun z -> y in g 1)",
-            "forall 'a 'b. 'a -> 'b -> 'a"
+            "forall a b. a -> b -> a"
         );
     }
 
@@ -639,40 +642,36 @@ mod tests {
     #[test]
     fn test_parameterized_data() {
         let mut env = Env::prelude();
-        env = env.eval_file("data Maybe 'a = Nothing | Just 'a").unwrap();
+        env = env.eval_file("data Maybe a = Nothing | Just a").unwrap();
 
-        assert_type!(&env, "Nothing", "forall 'a. Maybe 'a");
+        assert_type!(&env, "Nothing", "forall a. Maybe a");
         assert_type!(&env, "Just 5", "Maybe int");
         assert_type!(&env, "Just true", "Maybe bool");
-        assert_type!(&env, "fun x -> Just x", "forall 'a. 'a -> Maybe 'a");
+        assert_type!(&env, "fun x -> Just x", "forall a. a -> Maybe a");
         assert_type!(
             &env,
             "fun x -> Just (Just x)",
-            "forall 'a. 'a -> Maybe (Maybe 'a)"
+            "forall a. a -> Maybe (Maybe a)"
         );
         assert_type!(
             &env,
             "fun x -> Just (Just (Just x))",
-            "forall 'a. 'a -> Maybe (Maybe (Maybe 'a))"
+            "forall a. a -> Maybe (Maybe (Maybe a))"
         );
     }
 
     #[test]
     fn test_pair() {
         let mut env = Env::prelude();
-        env = env.eval_file("data Pair 'a 'b = Pair 'a 'b").unwrap();
+        env = env.eval_file("data Pair a b = Pair a b").unwrap();
 
         assert_type!(&env, "Pair 5 true", "Pair int bool");
-        assert_type!(&env, "fun x -> Pair x 5", "forall 'a. 'a -> Pair 'a int");
-        assert_type!(
-            &env,
-            "fun x -> Pair x true",
-            "forall 'a. 'a -> Pair 'a bool"
-        );
+        assert_type!(&env, "fun x -> Pair x 5", "forall a. a -> Pair a int");
+        assert_type!(&env, "fun x -> Pair x true", "forall a. a -> Pair a bool");
         assert_type!(
             &env,
             "fun x -> fun y -> Pair y (Pair x true)",
-            "forall 'a 'b. 'a -> 'b -> Pair 'b (Pair 'a bool)"
+            "forall a b. a -> b -> Pair b (Pair a bool)"
         );
     }
 
@@ -683,7 +682,7 @@ mod tests {
             .eval_file(
                 "
             data Sign = Negative | Zero | Positive
-            data Maybe 'a = Nothing | Just 'a
+            data Maybe a = Nothing | Just a
             ",
             )
             .unwrap();
@@ -701,19 +700,19 @@ mod tests {
         assert_type_error!(
             &env,
             "fun x -> match x with | Negative -> 0 | Nothing -> 1",
-            "Failed to unify constraint (Maybe 't3) = Sign"
+            "Failed to unify constraint (Maybe t3) = Sign"
         )
     }
 
     #[test]
     fn test_match_args() {
         let mut env = Env::prelude();
-        env = env.eval_file("data Maybe 'a = Nothing | Just 'a").unwrap();
+        env = env.eval_file("data Maybe a = Nothing | Just a").unwrap();
 
         assert_type!(
             &env,
             "fun x -> match x with | Nothing -> 0 | Just y -> 1",
-            "forall 'a. Maybe 'a -> int"
+            "forall a. Maybe a -> int"
         );
         assert_type!(
             &env,
@@ -723,24 +722,24 @@ mod tests {
         assert_type!(
             &env,
             "fun f -> fun x -> match x with | Nothing -> Nothing | Just y -> Just (f y)",
-            "forall 'a 'b. ('a -> 'b) -> Maybe 'a -> Maybe 'b"
+            "forall a b. (a -> b) -> Maybe a -> Maybe b"
         );
     }
 
     #[test]
     fn test_match_nested() {
         let mut env = Env::prelude();
-        env = env.eval_file("data Maybe 'a = Nothing | Just 'a").unwrap();
+        env = env.eval_file("data Maybe a = Nothing | Just a").unwrap();
 
         assert_type!(
             &env,
             "fun x -> match x with | Nothing -> 0 | Just Nothing -> 1 | Just (Just y) -> 2",
-            "forall 'a. Maybe (Maybe 'a) -> int"
+            "forall a. Maybe (Maybe a) -> int"
         );
         assert_type!(
             &env,
             "fun f -> fun x -> match x with | Nothing -> Nothing | Just Nothing -> Just Nothing | Just (Just y) -> Just (Just (f y))",
-            "forall 'a 'b. ('b -> 'a) -> Maybe (Maybe 'b) -> Maybe (Maybe 'a)"
+            "forall a b. (b -> a) -> Maybe (Maybe b) -> Maybe (Maybe a)"
         );
     }
 }
