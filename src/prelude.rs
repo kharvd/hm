@@ -1,5 +1,5 @@
 use crate::{
-    builtins::{BoolBinOps, BoolUnaryOps, IntBinOps, IntUnaryOps},
+    builtins::{BoolBinOps, BoolUnaryOps, CharUnaryOps, IntBinOps, IntUnaryOps, IO},
     env::Env,
     value::Value,
 };
@@ -16,10 +16,13 @@ impl Env {
             .extend(">", Value::new_builtin(IntBinOps::Gt))
             .extend(">=", Value::new_builtin(IntBinOps::Geq))
             .extend("neg", Value::new_builtin(IntUnaryOps::Neg))
+            .extend("chr", Value::new_builtin(IntUnaryOps::Chr))
+            .extend("ord", Value::new_builtin(CharUnaryOps::Ord))
             .extend("not", Value::new_builtin(BoolUnaryOps::Not))
             .extend("&&", Value::new_builtin(BoolBinOps::And))
             .extend("||", Value::new_builtin(BoolBinOps::Or))
             .extend("xor", Value::new_builtin(BoolBinOps::Xor))
+            .extend("putc", Value::new_builtin(IO::Putc))
             .extend("fix", Value::Fix);
 
         let prelude_source = "
@@ -32,15 +35,18 @@ impl Env {
             val (>) : int -> int -> bool
             val (>=) : int -> int -> bool
             val neg : int -> int
+            val chr : int -> char
+            val ord : char -> int
 
             val not : bool -> bool
             val (&&) : bool -> bool -> bool
             val (||) : bool -> bool -> bool
             val xor : bool -> bool -> bool
 
-            val fix : (a -> a) -> a
             let (==) = fun x -> fun y -> (x <= y) && (x >= y)
-                
+
+            val fix : (a -> a) -> a
+
             data Unit = Unit
             data Tuple1 a = Tuple1 a
             data Tuple2 a b = Tuple2 a b
@@ -132,6 +138,23 @@ impl Env {
                 | (Nil, Nil) -> Nil
                 | (Cons x xs, Cons y ys) -> Cons (Tuple2 x y) (zip xs ys)
                 | _ -> Nil
+
+            val putc : char -> Unit
+
+            let discard = fun x -> Unit
+
+            let rec do = fun xs ->
+                match xs with
+                | Nil -> Unit
+                | Cons x xs -> discard (x, do xs)
+
+            let rec putStr = fun s -> discard (map putc s)
+            
+            let putStrLn = fun s -> 
+                do [
+                    putStr s,
+                    putc '\n'
+                ]
         ";
 
         env.eval_file(prelude_source).unwrap()

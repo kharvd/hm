@@ -29,6 +29,7 @@ impl<T: BinOp + Clone + 'static> BuiltinFunc for T {
 #[derive(Clone, Copy)]
 pub enum IntUnaryOps {
     Neg,
+    Chr,
 }
 
 impl BuiltinFunc for IntUnaryOps {
@@ -36,6 +37,7 @@ impl BuiltinFunc for IntUnaryOps {
         let arg = arg.as_int()?;
         Ok(match self {
             IntUnaryOps::Neg => Value::Int(-arg),
+            IntUnaryOps::Chr => Value::Char(arg as u8 as char),
         })
     }
 }
@@ -99,5 +101,35 @@ impl BinOp for BoolBinOps {
             BoolBinOps::Or => Value::Bool(arg1 || arg2),
             BoolBinOps::Xor => Value::Bool(arg1 ^ arg2),
         })
+    }
+}
+
+#[derive(Clone, Copy)]
+pub enum CharUnaryOps {
+    Ord,
+}
+
+impl BuiltinFunc for CharUnaryOps {
+    fn eval(&self, arg: Value) -> Result<Value, String> {
+        let arg = arg.as_char()?;
+        Ok(match self {
+            CharUnaryOps::Ord => Value::Int(arg as u8 as i64),
+        })
+    }
+}
+
+pub enum IO {
+    Putc,
+}
+
+impl BuiltinFunc for IO {
+    fn eval(&self, arg: Value) -> Result<Value, String> {
+        match self {
+            IO::Putc => {
+                let arg = arg.as_char()?;
+                print!("{}", arg);
+                Ok(Value::Data("Unit".to_string(), vec![]))
+            }
+        }
     }
 }

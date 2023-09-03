@@ -229,6 +229,13 @@ impl Value {
         }
     }
 
+    pub fn as_char(&self) -> Result<char, String> {
+        match self {
+            Value::Char(c) => Ok(*c),
+            _ => Err(format!("Expected char, but got {}", self)),
+        }
+    }
+
     pub fn new_builtin<T: BuiltinFunc + 'static>(f: T) -> Self {
         Value::BuiltinFunc(Rc::new(f))
     }

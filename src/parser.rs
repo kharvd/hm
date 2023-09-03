@@ -245,7 +245,8 @@ fn parse_type_constructor(
             | Some(Token::Variable(_))
             | Some(Token::Constructor(_))
             | Some(Token::Keyword(Keyword::Bool))
-            | Some(Token::Keyword(Keyword::Int)) => {
+            | Some(Token::Keyword(Keyword::Int))
+            | Some(Token::Keyword(Keyword::Char)) => {
                 let arg = Rc::new(parse_non_arrow_type_expr(tokens)?);
                 args.push(arg);
             }
