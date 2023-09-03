@@ -20,6 +20,13 @@ macro_rules! e_bool {
 }
 
 #[macro_export]
+macro_rules! e_char {
+    ($x:expr) => {
+        Expr::Char($x)
+    };
+}
+
+#[macro_export]
 macro_rules! e_ap {
     ($f:expr, $x:expr) => {
         Expr::Ap(Rc::new($f), Rc::new($x))

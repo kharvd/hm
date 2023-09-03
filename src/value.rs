@@ -137,37 +137,77 @@ impl Display for Value {
     }
 }
 
+fn extract_list(name: &String, args: &Vec<Value>) -> Result<Vec<Value>, String> {
+    let mut name = name;
+    let mut args = args;
+
+    let mut res = vec![];
+
+    loop {
+        match name.as_str() {
+            "Nil" => break,
+            "Cons" => {
+                res.push(args[0].clone());
+                match &args[1] {
+                    Value::Data(name2, args2) => {
+                        name = name2;
+                        args = args2;
+                    }
+                    _ => Err(format!("Expected list, but got {}", args[1]))?,
+                }
+            }
+            _ => Err(format!("Expected list, but got {}", args[1]))?,
+        }
+    }
+
+    Ok(res)
+}
+
 fn write_list(
     f: &mut std::fmt::Formatter,
     name: &String,
     args: &Vec<Value>,
 ) -> Result<(), std::fmt::Error> {
-    let mut name = name;
-    let mut args = args;
-    write!(f, "[")?;
+    let name = name;
+    let args = args;
 
-    loop {
-        match name.as_str() {
-            "Nil" => {
-                write!(f, "]")?;
-                return Ok(());
-            }
-            "Cons" => {
-                write!(f, "{}", args[0])?;
-                match &args[1] {
-                    Value::Data(name2, args2) => {
-                        name = name2;
-                        args = args2;
-                        if name2 == "Cons" {
-                            write!(f, ", ")?;
-                        }
-                    }
-                    _ => Err(std::fmt::Error)?,
-                }
-            }
-            _ => Err(std::fmt::Error)?,
-        }
+    if name == "Nil" {
+        return write!(f, "[]");
     }
+
+    if let Value::Char(_) = args[0] {
+        return write_string(f, name, args);
+    }
+
+    let vals = extract_list(name, args).map_err(|_| std::fmt::Error)?;
+
+    write!(f, "[{}]", vals.into_iter().join(", "))?;
+
+    Ok(())
+}
+
+fn write_string(
+    f: &mut std::fmt::Formatter,
+    name: &String,
+    args: &Vec<Value>,
+) -> Result<(), std::fmt::Error> {
+    let vals = extract_list(name, args).map_err(|_| std::fmt::Error)?;
+
+    write!(
+        f,
+        "\"{}\"",
+        vals.into_iter()
+            .map(|v| {
+                if let Value::Char(c) = v {
+                    c
+                } else {
+                    panic!("Expected char, but got {}", v);
+                }
+            })
+            .collect::<String>()
+    )?;
+
+    Ok(())
 }
 
 fn write_tuple(f: &mut std::fmt::Formatter, args: &[Value]) -> Result<(), std::fmt::Error> {

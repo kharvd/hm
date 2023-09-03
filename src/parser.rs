@@ -335,6 +335,7 @@ fn parse_primary(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<E
         Some(Token::Constructor(name)) => Expr::Ident(name),
         Some(Token::Int(i)) => Expr::Int(i),
         Some(Token::Char(c)) => Expr::Char(c),
+        Some(Token::String(s)) => make_char_list(s),
         Some(Token::Keyword(Keyword::True)) => Expr::Bool(true),
         Some(Token::Keyword(Keyword::False)) => Expr::Bool(false),
         Some(Token::Keyword(Keyword::If)) => parse_if_expr(tokens)?,
@@ -345,6 +346,20 @@ fn parse_primary(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<E
         Some(Token::LBracket) => parse_list(tokens)?,
         t => return Err(format!("Expected expression, got {:?}", t)),
     })
+}
+
+fn make_char_list(s: String) -> Expr {
+    let mut expr = Expr::Ident("Nil".to_string());
+    for c in s.chars().rev() {
+        expr = Expr::Ap(
+            Rc::new(Expr::Ap(
+                Rc::new(Expr::Ident("Cons".to_string())),
+                Rc::new(Expr::Char(c)),
+            )),
+            Rc::new(expr),
+        );
+    }
+    expr
 }
 
 fn parse_parenthesized_expr(
@@ -609,11 +624,11 @@ fn parse_comma_patterns(
 
 #[cfg(test)]
 mod tests {
-    use crate::lexer;
     use crate::{
         e_ap, e_bool, e_ident, e_if, e_int, e_lambda, e_let, e_match, p_bool, p_constructor, p_int,
         p_var, p_wildcard, t_bool, t_constructor, t_forall, t_fun, t_int, t_type_var,
     };
+    use crate::{e_char, lexer};
 
     use super::*;
 
@@ -876,6 +891,23 @@ mod tests {
         assert_eq!(
             parse_pattern(&mut iter),
             Ok(p_constructor!("Tuple3", p_int!(1), p_int!(2), p_int!(3)))
+        );
+    }
+
+    #[test]
+    fn test_parse_string() {
+        let tokens = lexer::tokenize("\"abc\"").unwrap();
+        let mut iter = tokens.into_iter().peekable();
+
+        assert_eq!(
+            parse_expr(&mut iter),
+            Ok(e_ap!(
+                e_ap!(e_ident!("Cons"), e_char!('a')),
+                e_ap!(
+                    e_ap!(e_ident!("Cons"), e_char!('b')),
+                    e_ap!(e_ap!(e_ident!("Cons"), e_char!('c')), e_ident!("Nil"))
+                )
+            ))
         );
     }
 }

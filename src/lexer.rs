@@ -63,6 +63,7 @@ pub enum Token {
     Int(i64),
     Char(char),
     Keyword(Keyword),
+    String(String),
     LParen,
     RParen,
     LBracket,
@@ -160,15 +161,7 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, String> {
                 chars.next();
 
                 let c = match chars.next() {
-                    Some('\\') => match chars.next() {
-                        Some('n') => '\n',
-                        Some('t') => '\t',
-                        Some('r') => '\r',
-                        Some('\\') => '\\',
-                        Some('\'') => '\'',
-                        Some(c) => return Err(format!("Invalid escape sequence '\\{}'", c)),
-                        None => return Err("Unexpected end of input".to_string()),
-                    },
+                    Some('\\') => parse_escape_sequence(&mut chars)?,
                     Some(c) => c,
                     None => return Err("Unexpected end of input".to_string()),
                 };
@@ -178,6 +171,23 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, String> {
                 } else {
                     return Err("Expected closing apostrophe".to_string());
                 }
+            }
+            '"' => {
+                // parse string, handling escape sequences
+                chars.next();
+
+                let mut s = String::new();
+                while let Some(c) = chars.next() {
+                    let c = match c {
+                        '\\' => parse_escape_sequence(&mut chars)?,
+                        '"' => break,
+                        c => c,
+                    };
+
+                    s.push(c);
+                }
+
+                tokens.push(Token::String(s));
             }
             '-' => {
                 chars.next();
@@ -272,6 +282,18 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, String> {
     }
 
     Ok(tokens)
+}
+
+fn parse_escape_sequence(chars: &mut std::iter::Peekable<std::str::Chars>) -> Result<char, String> {
+    match chars.next() {
+        Some('n') => Ok('\n'),
+        Some('t') => Ok('\t'),
+        Some('r') => Ok('\r'),
+        Some('\\') => Ok('\\'),
+        Some('\'') => Ok('\''),
+        Some(c) => Err(format!("Invalid escape sequence '\\{}'", c)),
+        None => Err("Unexpected end of input".to_string()),
+    }
 }
 
 #[cfg(test)]
@@ -405,5 +427,14 @@ mod tests {
                 Token::Char('\''),
             ])
         );
+
+        assert_eq!(
+            tokenize("s = \"hello,\\nworld!\""),
+            Ok(vec![
+                Token::Variable("s".to_string()),
+                Token::Equals,
+                Token::String("hello,\nworld!".to_string()),
+            ])
+        )
     }
 }
