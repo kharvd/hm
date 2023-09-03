@@ -7,23 +7,23 @@ use crate::{
 impl Env {
     pub fn prelude() -> Env {
         let env = Env::new()
-            .extend("+", Value::new_builtin(IntBinOps::Plus))
-            .extend("-", Value::new_builtin(IntBinOps::Minus))
-            .extend("*", Value::new_builtin(IntBinOps::Mult))
-            .extend("/", Value::new_builtin(IntBinOps::Div))
-            .extend("<", Value::new_builtin(IntBinOps::Lt))
-            .extend("<=", Value::new_builtin(IntBinOps::Leq))
-            .extend(">", Value::new_builtin(IntBinOps::Gt))
-            .extend(">=", Value::new_builtin(IntBinOps::Geq))
-            .extend("neg", Value::new_builtin(IntUnaryOps::Neg))
-            .extend("chr", Value::new_builtin(IntUnaryOps::Chr))
-            .extend("ord", Value::new_builtin(CharUnaryOps::Ord))
-            .extend("not", Value::new_builtin(BoolUnaryOps::Not))
-            .extend("&&", Value::new_builtin(BoolBinOps::And))
-            .extend("||", Value::new_builtin(BoolBinOps::Or))
-            .extend("xor", Value::new_builtin(BoolBinOps::Xor))
-            .extend("putc", Value::new_builtin(IO::Putc))
-            .extend("fix", Value::Fix);
+            .extend_value("+", Value::new_builtin(IntBinOps::Plus))
+            .extend_value("-", Value::new_builtin(IntBinOps::Minus))
+            .extend_value("*", Value::new_builtin(IntBinOps::Mult))
+            .extend_value("/", Value::new_builtin(IntBinOps::Div))
+            .extend_value("<", Value::new_builtin(IntBinOps::Lt))
+            .extend_value("<=", Value::new_builtin(IntBinOps::Leq))
+            .extend_value(">", Value::new_builtin(IntBinOps::Gt))
+            .extend_value(">=", Value::new_builtin(IntBinOps::Geq))
+            .extend_value("neg", Value::new_builtin(IntUnaryOps::Neg))
+            .extend_value("chr", Value::new_builtin(IntUnaryOps::Chr))
+            .extend_value("ord", Value::new_builtin(CharUnaryOps::Ord))
+            .extend_value("not", Value::new_builtin(BoolUnaryOps::Not))
+            .extend_value("&&", Value::new_builtin(BoolBinOps::And))
+            .extend_value("||", Value::new_builtin(BoolBinOps::Or))
+            .extend_value("xor", Value::new_builtin(BoolBinOps::Xor))
+            .extend_value("putc", Value::new_builtin(IO::Putc))
+            .extend_value("fix", Value::Fix);
 
         let prelude_source = "
             val (+) : int -> int -> int
@@ -66,7 +66,7 @@ impl Env {
             let snd = fun p -> 
                 match p with
                 | (_, y) -> y
-
+            
             data List a = Nil | Cons a (List a)
             let nil = Nil
             let cons = fun x -> fun xs -> Cons x xs
@@ -154,7 +154,7 @@ impl Env {
                 do [
                     putStr s,
                     putc '\n'
-                ]
+                ]  
         ";
 
         env.eval_file(prelude_source).unwrap()

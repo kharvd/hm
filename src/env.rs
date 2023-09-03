@@ -1,12 +1,18 @@
-use std::fmt::{Debug, Display};
+use std::{
+    cell::RefCell,
+    fmt::{Debug, Display},
+    rc::Rc,
+};
 
 use rpds::{HashTrieMap, HashTrieSet};
 
 use crate::{ast::TypeExpr, value::Value};
 
+type ValueThunk = Rc<RefCell<Option<Value>>>;
+
 #[derive(Clone, PartialEq)]
 pub struct Env {
-    pub vars: HashTrieMap<String, Value>,
+    pub vars: HashTrieMap<String, ValueThunk>,
     pub typings: HashTrieMap<String, TypeExpr>,
 }
 
@@ -34,7 +40,16 @@ impl Env {
         }
     }
 
-    pub fn extend(&self, name: &str, value: Value) -> Self {
+    pub fn extend_value(&self, name: &str, value: Value) -> Self {
+        Self {
+            vars: self
+                .vars
+                .insert(name.to_string(), Rc::new(RefCell::new(Some(value)))),
+            typings: self.typings.clone(),
+        }
+    }
+
+    pub fn extend_thunk(&self, name: &str, value: ValueThunk) -> Self {
         Self {
             vars: self.vars.insert(name.to_string(), value),
             typings: self.typings.clone(),
@@ -48,9 +63,9 @@ impl Env {
         }
     }
 
-    pub fn resolve_value(&self, name: &String) -> Result<Value, String> {
+    pub fn resolve_value(&self, name: &String) -> Result<Option<Value>, String> {
         match self.vars.get(name) {
-            Some(value) => Ok(value.clone()),
+            Some(value) => Ok(value.borrow().clone()),
             None => Err(format!("Unknown identifier {}", name)),
         }
     }

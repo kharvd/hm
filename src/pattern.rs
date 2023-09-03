@@ -25,7 +25,7 @@ pub fn try_pattern_match(
                 None
             }
         }
-        (v, ExprPattern::Variable(name2)) => Some(env.extend(&name2, v.clone())),
+        (v, ExprPattern::Variable(name2)) => Some(env.extend_value(&name2, v.clone())),
         _ => None,
     }
 }
@@ -57,7 +57,7 @@ mod tests {
     fn test_binding() {
         let env = Env::new();
         let res = try_pattern_match(&env, &Value::Int(42), &p_var!("x"));
-        assert_eq!(res, Some(env.extend("x", Value::Int(42))));
+        assert_eq!(res, Some(env.extend_value("x", Value::Int(42))));
     }
 
     #[test]
@@ -76,14 +76,17 @@ mod tests {
         let env = Env::new();
         let res = try_pattern_match(
             &env,
-            &Value::Data("Pair".to_string(), vec![Value::Int(1), Value::Bool(true)]),
+            &Value::Data(
+                "Pair".to_string(),
+                vec![Rc::new(Value::Int(1)), Rc::new(Value::Bool(true))],
+            ),
             &p_constructor!("Pair", p_var!("x"), p_var!("y")),
         );
         assert_eq!(
             res,
             Some(
-                env.extend("x", Value::Int(1))
-                    .extend("y", Value::Bool(true))
+                env.extend_value("x", Value::Int(1))
+                    .extend_value("y", Value::Bool(true))
             )
         );
     }
@@ -96,8 +99,11 @@ mod tests {
             &Value::Data(
                 "Pair".to_string(),
                 vec![
-                    Value::Int(1),
-                    Value::Data("Pair".to_string(), vec![Value::Bool(true), Value::Int(2)]),
+                    Rc::new(Value::Int(1)),
+                    Rc::new(Value::Data(
+                        "Pair".to_string(),
+                        vec![Rc::new(Value::Bool(true)), Rc::new(Value::Int(2))],
+                    )),
                 ],
             ),
             &p_constructor!(
@@ -109,9 +115,9 @@ mod tests {
         assert_eq!(
             res,
             Some(
-                env.extend("x", Value::Int(1))
-                    .extend("y", Value::Bool(true))
-                    .extend("z", Value::Int(2))
+                env.extend_value("x", Value::Int(1))
+                    .extend_value("y", Value::Bool(true))
+                    .extend_value("z", Value::Int(2))
             )
         );
     }

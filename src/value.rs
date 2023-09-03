@@ -1,4 +1,5 @@
 use std::{
+    borrow::Borrow,
     fmt::{Debug, Display},
     rc::Rc,
 };
@@ -21,14 +22,9 @@ pub enum Value {
         body: Rc<Expr>,
         closure: Env,
     },
-    RecFunc {
-        name: String,
-        body: Rc<Expr>,
-        closure: Env,
-    },
     Fix,
     BuiltinFunc(Rc<dyn BuiltinFunc>),
-    Data(String, Vec<Value>),
+    Data(String, Vec<Rc<Value>>),
 }
 
 impl PartialEq for Value {
@@ -49,18 +45,6 @@ impl PartialEq for Value {
                     closure: r_closure,
                 },
             ) => l_param == r_param && l_body == r_body && l_closure == r_closure,
-            (
-                Self::RecFunc {
-                    name: l_name,
-                    body: l_body,
-                    closure: l_closure,
-                },
-                Self::RecFunc {
-                    name: r_name,
-                    body: r_body,
-                    closure: r_closure,
-                },
-            ) => l_name == r_name && l_body == r_body && l_closure == r_closure,
             (Self::BuiltinFunc(_), Self::BuiltinFunc(_)) => false,
             (Self::Fix, Self::Fix) => true,
             (Self::Data(l_name, l_args), Self::Data(r_name, r_args)) => {
@@ -88,16 +72,6 @@ impl Debug for Value {
                 .field("closure", closure)
                 .finish(),
             Self::BuiltinFunc(_) => f.write_str("<built-in>"),
-            Self::RecFunc {
-                name,
-                body,
-                closure,
-            } => f
-                .debug_struct("Func")
-                .field("name", name)
-                .field("body", body)
-                .field("closure", closure)
-                .finish(),
             Self::Fix => f.write_str("Fix"),
             Self::Data(name, args) => f.debug_tuple("Data").field(name).field(args).finish(),
         }
@@ -111,7 +85,6 @@ impl Display for Value {
             Value::Bool(b) => write!(f, "{}", b),
             Value::Char(c) => write!(f, "\'{}\'", c),
             Value::Func { param, body, .. } => write!(f, "(fun {} -> {})", param, body),
-            Value::RecFunc { name, body, .. } => write!(f, "(let rec {} = {})", name, body),
             Value::BuiltinFunc(_) => write!(f, "<builtin>"),
             Value::Fix => write!(f, "fix"),
             Value::Data(name, args) => {
@@ -137,7 +110,7 @@ impl Display for Value {
     }
 }
 
-fn extract_list(name: &String, args: &Vec<Value>) -> Result<Vec<Value>, String> {
+fn extract_list(name: &String, args: &Vec<Rc<Value>>) -> Result<Vec<Rc<Value>>, String> {
     let mut name = name;
     let mut args = args;
 
@@ -148,7 +121,7 @@ fn extract_list(name: &String, args: &Vec<Value>) -> Result<Vec<Value>, String> 
             "Nil" => break,
             "Cons" => {
                 res.push(args[0].clone());
-                match &args[1] {
+                match args[1].borrow() {
                     Value::Data(name2, args2) => {
                         name = name2;
                         args = args2;
@@ -166,7 +139,7 @@ fn extract_list(name: &String, args: &Vec<Value>) -> Result<Vec<Value>, String> 
 fn write_list(
     f: &mut std::fmt::Formatter,
     name: &String,
-    args: &Vec<Value>,
+    args: &Vec<Rc<Value>>,
 ) -> Result<(), std::fmt::Error> {
     let name = name;
     let args = args;
@@ -175,7 +148,7 @@ fn write_list(
         return write!(f, "[]");
     }
 
-    if let Value::Char(_) = args[0] {
+    if let Value::Char(_) = args[0].borrow() {
         return write_string(f, name, args);
     }
 
@@ -189,7 +162,7 @@ fn write_list(
 fn write_string(
     f: &mut std::fmt::Formatter,
     name: &String,
-    args: &Vec<Value>,
+    args: &Vec<Rc<Value>>,
 ) -> Result<(), std::fmt::Error> {
     let vals = extract_list(name, args).map_err(|_| std::fmt::Error)?;
 
@@ -198,8 +171,8 @@ fn write_string(
         "\"{}\"",
         vals.into_iter()
             .map(|v| {
-                if let Value::Char(c) = v {
-                    c
+                if let Value::Char(c) = v.borrow() {
+                    c.clone()
                 } else {
                     panic!("Expected char, but got {}", v);
                 }
@@ -210,7 +183,7 @@ fn write_string(
     Ok(())
 }
 
-fn write_tuple(f: &mut std::fmt::Formatter, args: &[Value]) -> Result<(), std::fmt::Error> {
+fn write_tuple(f: &mut std::fmt::Formatter, args: &Vec<Rc<Value>>) -> Result<(), std::fmt::Error> {
     write!(f, "({})", args.into_iter().join(", "))
 }
 

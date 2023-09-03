@@ -1,4 +1,4 @@
-use std::{borrow::Borrow, rc::Rc};
+use std::{borrow::Borrow, cell::RefCell, rc::Rc};
 
 use crate::{
     ast::{Expr, Statement, TypeExpr},
@@ -42,7 +42,7 @@ impl Statement {
                 let var_type = infer(env, &expr)?;
                 let value = expr.eval(env)?;
                 env.extend_type(&name, var_type.clone())
-                    .extend(&name, value.clone())
+                    .extend_value(&name, value)
             }
             Statement::LetRec(name, expr) => {
                 let binding = Expr::Ap(
@@ -78,7 +78,7 @@ impl Statement {
                     let (constructor_name, constructor_type) =
                         constructor_for_variant(variant, name, params)?;
                     new_env = new_env
-                        .extend(
+                        .extend_value(
                             &constructor_name,
                             Value::Data(constructor_name.clone(), vec![]),
                         )
@@ -126,7 +126,10 @@ impl Expr {
             Expr::Char(c) => Ok(Value::Char(*c)),
             Expr::Ident(name) => {
                 let value = env.resolve_value(&name)?;
-                Ok(value.clone())
+                let Some(value) = value else {
+                    return Err(format!("Infinite loop: {}", name));
+                };
+                Ok(value)
             }
             Expr::If(cond, if_true, if_false) => {
                 let cond = cond.eval(env)?;
@@ -143,7 +146,7 @@ impl Expr {
             }),
             Expr::Let(name, bound_expr, expr) => {
                 let bound_value = bound_expr.eval(env)?;
-                let inner_env = env.extend(&name, bound_value);
+                let inner_env = env.extend_value(&name, bound_value);
                 expr.eval(&inner_env)
             }
             Expr::Ap(func, arg) => {
@@ -155,7 +158,7 @@ impl Expr {
                         closure,
                     } => {
                         let arg_eval = arg.eval(env)?;
-                        let inner_env = closure.extend(&param, arg_eval);
+                        let inner_env = closure.extend_value(&param, arg_eval);
                         body.eval(&inner_env)
                     }
                     Value::BuiltinFunc(f) => {
@@ -169,35 +172,21 @@ impl Expr {
                                 param,
                                 body,
                                 closure,
-                            } => Ok(Value::RecFunc {
-                                name: param.clone(),
-                                body: body.clone(),
-                                closure: closure.clone(),
-                            }),
+                            } => {
+                                let fun = Rc::new(RefCell::new(None));
+                                let body_eval =
+                                    body.eval(&closure.extend_thunk(&param, fun.clone()))?;
+                                fun.replace(Some(body_eval.clone()));
+                                Ok(body_eval)
+                            }
                             _ => Err(format!("Unexpected argument to fix: {}", arg)),
                         }
                     }
-                    Value::RecFunc {
-                        name,
-                        body,
-                        closure,
-                    } => {
-                        let body_env = env.extend(
-                            &name,
-                            Value::RecFunc {
-                                name: name.clone(),
-                                body: body.clone(),
-                                closure: closure.clone(),
-                            },
-                        );
-                        let ap_expr = Expr::Ap(body, arg.clone());
-                        ap_expr.eval(&body_env)
-                    }
                     Value::Data(name, args) => {
                         let arg_eval = arg.eval(env)?;
-                        let mut new_args = args;
-                        new_args.push(arg_eval);
-                        Ok(Value::Data(name, new_args))
+                        let mut new_args = args.clone();
+                        new_args.push(Rc::new(arg_eval));
+                        Ok(Value::Data(name.clone(), new_args))
                     }
                     _ => Err(format!("Expected function, got {}", func_eval)),
                 }
@@ -353,11 +342,14 @@ mod tests {
             Value::Data(
                 "Cons".to_string(),
                 vec![
-                    Value::Int(1),
-                    Value::Data(
+                    Rc::new(Value::Int(1)),
+                    Rc::new(Value::Data(
                         "Cons".to_string(),
-                        vec![Value::Int(2), Value::Data("Nil".to_string(), vec![])]
-                    )
+                        vec![
+                            Rc::new(Value::Int(2)),
+                            Rc::new(Value::Data("Nil".to_string(), vec![]))
+                        ]
+                    ))
                 ]
             )
         );
@@ -403,5 +395,23 @@ mod tests {
 
         assert_same_value!(env, "len (Cons 1 (Cons 2 (Cons 3 Nil)))", "3");
         assert_same_value!(env, "len Nil", "0");
+    }
+
+    #[test]
+    fn mutual_recursion() {
+        let env = eval_file(
+            "let is_even_is_odd = fix (fun f -> 
+                (fun n -> if n == 0 then true else (snd f) (n - 1), 
+                 fun n -> if n == 0 then false else (fst f) (n - 1)))
+
+            let is_even = fst is_even_is_odd
+            let is_odd = snd is_even_is_odd
+            ",
+        );
+
+        assert_same_value!(env, "is_even 10", "true");
+        assert_same_value!(env, "is_even 11", "false");
+        assert_same_value!(env, "is_odd 10", "false");
+        assert_same_value!(env, "is_odd 11", "true");
     }
 }
