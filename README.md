@@ -4,8 +4,9 @@
 
 ## Usage
 
+Run REPL:
 ```bash
-$ cargo run # Run REPL
+$ cargo run
 ```
 
 ## Features
