@@ -41,6 +41,25 @@ impl Display for ExprPattern {
 }
 
 #[derive(Debug, PartialEq, Clone)]
+pub struct MatchCase {
+    pub pattern: Rc<ExprPattern>,
+    pub guard: Option<Rc<Expr>>,
+    pub body: Rc<Expr>,
+}
+
+impl Display for MatchCase {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "| {} ", self.pattern)?;
+
+        if let Some(guard) = &self.guard {
+            write!(f, "if {} ", guard)?;
+        }
+
+        write!(f, "-> {}", self.body)
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
 pub enum Expr {
     Int(i64),
     Bool(bool),
@@ -50,7 +69,7 @@ pub enum Expr {
     Let(String, Rc<Expr>, Rc<Expr>),
     Lambda(String, Rc<Expr>),
     Ap(Rc<Expr>, Rc<Expr>),
-    Match(Rc<Expr>, Vec<(Rc<ExprPattern>, Rc<Expr>)>),
+    Match(Rc<Expr>, Vec<MatchCase>),
 }
 
 impl Display for Expr {
@@ -66,13 +85,13 @@ impl Display for Expr {
             Expr::Lambda(param, body) => write!(f, "(fun {} -> {})", param, body),
             Expr::Ap(fun, arg) => write!(f, "({} {})", fun, arg),
             Expr::Let(name, expr, body) => write!(f, "(let {} = {} in {})", name, expr, body),
-            Expr::Match(expr, patterns) => write!(
+            Expr::Match(expr, cases) => write!(
                 f,
                 "(match {} with {})",
                 expr,
-                patterns
+                cases
                     .iter()
-                    .map(|(pat, body)| format!("| {} -> {}", pat, body))
+                    .map(|x| x.to_string())
                     .collect::<Vec<_>>()
                     .join(" ")
             ),

@@ -3,7 +3,7 @@ use std::fmt::Display;
 use rpds::RedBlackTreeSet;
 
 use crate::{
-    ast::{Expr, ExprPattern, TypeExpr},
+    ast::{Expr, ExprPattern, MatchCase, TypeExpr},
     env::Env,
 };
 
@@ -175,7 +175,12 @@ fn infer_constraints_inner(
             let mut new_constraints = Vec::new();
             new_constraints.append(&mut infer_expr.constraints);
 
-            for (pattern, body) in patterns.iter() {
+            for MatchCase {
+                pattern,
+                guard,
+                body,
+            } in patterns.iter()
+            {
                 let mut infer_pattern =
                     infer_constraints_for_pattern(env, pattern, type_var_counter)?;
                 let env_with_bindings = infer_pattern
@@ -186,6 +191,14 @@ fn infer_constraints_inner(
                     });
                 let mut infer_body =
                     infer_constraints_inner(&env_with_bindings, body, type_var_counter)?;
+
+                if let Some(guard) = guard {
+                    let mut infer_guard =
+                        infer_constraints_inner(&env_with_bindings, guard, type_var_counter)?;
+                    new_constraints.append(&mut infer_guard.constraints);
+                    new_constraints
+                        .push(Constraint::new(infer_guard.inferred_type, TypeExpr::Bool));
+                }
 
                 new_constraints.append(&mut infer_pattern.inference.constraints);
                 new_constraints.append(&mut infer_body.constraints);
@@ -711,6 +724,24 @@ mod tests {
             "fun x -> match x with | Negative -> 0 | Nothing -> 1",
             "Failed to unify constraint (Maybe t3) = Sign"
         )
+    }
+
+    #[test]
+    fn test_match_guard() {
+        let mut env = Env::prelude();
+        env = env.eval_file("data Maybe a = Nothing | Just a").unwrap();
+
+        assert_type!(
+            &env,
+            "fun x -> match x with | Nothing -> 0 | Just y if y < 0 -> 1 | Just y -> 2",
+            "Maybe int -> int"
+        );
+
+        assert_type_error!(
+            &env,
+            "fun x -> match x with | Nothing -> 0 | Just y if y < 0 -> true | Just true -> 2",
+            "Failed to unify constraint bool = int"
+        );
     }
 
     #[test]

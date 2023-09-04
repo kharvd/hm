@@ -1,7 +1,7 @@
 use std::{borrow::Borrow, cell::RefCell, rc::Rc};
 
 use crate::{
-    ast::{Expr, Statement, TypeExpr},
+    ast::{Expr, MatchCase, Statement, TypeExpr},
     env::Env,
     pattern::try_pattern_match,
     typing::infer,
@@ -189,14 +189,30 @@ fn eval_expr(expr: Rc<Expr>, env: &Env) -> Result<Value, String> {
                     _ => return Err(format!("Expected function, got {}", func_eval)),
                 }
             }
-            Expr::Match(match_expr, patterns) => {
+            Expr::Match(match_expr, cases) => {
                 let expr_eval = eval_expr(match_expr.clone(), &env)?;
-                for (choice_pattern, choice_expr) in patterns {
+
+                for MatchCase {
+                    pattern: choice_pattern,
+                    body: choice_expr,
+                    guard,
+                } in cases
+                {
                     if let Some(bound_env) = try_pattern_match(&env, &expr_eval, choice_pattern) {
-                        // tail call optimization
-                        expr = choice_expr.clone();
-                        env = bound_env;
-                        continue 'outer;
+                        let guard_value = guard
+                            .as_ref()
+                            .map(|g| {
+                                let guard_eval = eval_expr(g.clone(), &bound_env)?;
+                                guard_eval.as_bool()
+                            })
+                            .unwrap_or(Ok(true))?;
+
+                        if guard_value {
+                            // tail call optimization
+                            expr = choice_expr.clone();
+                            env = bound_env;
+                            continue 'outer;
+                        }
                     }
                 }
                 return Err(format!("No match for {}", expr_eval));
@@ -224,14 +240,14 @@ fn apply_fix(arg: &Rc<Expr>, env: &Env) -> Result<Value, String> {
 
 #[cfg(test)]
 mod tests {
-    use std::rc::Rc;
-
     use crate::{
         ast::Expr,
         e_ident,
         eval::{Env, Value},
         parser,
     };
+
+    use std::rc::Rc;
 
     fn parse_expr(s: &str) -> Expr {
         match parser::parse(s).unwrap() {
@@ -379,6 +395,21 @@ mod tests {
         assert_same_value!(env, "f Negative", "0");
         assert_same_value!(env, "f Zero", "1");
         assert_same_value!(env, "f Positive", "2");
+    }
+
+    #[test]
+    fn match_guard() {
+        let env = eval_file(
+            "let f = fun x ->
+                match x with
+                | x if x > 0 -> 1
+                | x if x < 0 -> neg 1
+                | _ -> 0",
+        );
+
+        assert_same_value!(env, "f 2", "1");
+        assert_same_value!(env, "f (neg 2)", "neg 1");
+        assert_same_value!(env, "f 0", "0");
     }
 
     #[test]

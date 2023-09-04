@@ -55,15 +55,20 @@ macro_rules! e_let {
 }
 
 #[macro_export]
+macro_rules! e_match_case {
+    ($pat:expr, $guard:expr, $body:expr) => {
+        MatchCase {
+            pattern: Rc::new($pat),
+            guard: $guard.map(Rc::new),
+            body: Rc::new($body),
+        }
+    };
+}
+
+#[macro_export]
 macro_rules! e_match {
     ($expr:expr, $cases:expr) => {
-        Expr::Match(
-            Rc::new($expr),
-            $cases
-                .into_iter()
-                .map(|(pat, expr)| (Rc::new(pat), Rc::new(expr)))
-                .collect(),
-        )
+        Expr::Match(Rc::new($expr), $cases.into_iter().collect())
     };
 }
 

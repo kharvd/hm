@@ -3,7 +3,7 @@ use std::rc::Rc;
 
 use rpds::RedBlackTreeSet;
 
-use crate::ast::{Expr, ExprPattern, Statement, TypeExpr};
+use crate::ast::{Expr, ExprPattern, MatchCase, Statement, TypeExpr};
 use crate::lexer::{tokenize, InfixOp, Keyword, Token};
 
 #[derive(Debug)]
@@ -309,6 +309,7 @@ fn parse_expr_prec(
             | Token::Keyword(Keyword::Data)
             | Token::Keyword(Keyword::Val)
             | Token::Comma
+            | Token::Arrow
             | Token::Pipe => break,
             _ => {
                 lhs = Expr::Ap(Rc::new(lhs), Rc::new(parse_primary(tokens)?));
@@ -345,7 +346,7 @@ fn parse_primary(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<E
         Some(Token::Keyword(Keyword::Match)) => parse_match_expr(tokens)?,
         Some(Token::LParen) => parse_parenthesized_expr(tokens)?,
         Some(Token::LBracket) => parse_list(tokens)?,
-        t => return Err(format!("Expected expression, got {:?}", t)),
+        t => return Err(format!("Expected primary expression, got {:?}", t)),
     })
 }
 
@@ -493,21 +494,40 @@ fn parse_match_expr(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Resul
         _ => return Err("Expected 'with' after match expression".to_string()),
     }
 
-    let mut cases = Vec::new();
+    let cases = parse_match_cases(tokens)?;
 
+    Ok(Expr::Match(Rc::new(expr), cases))
+}
+
+fn parse_match_cases(
+    tokens: &mut Peekable<impl Iterator<Item = Token>>,
+) -> Result<Vec<MatchCase>, String> {
+    let mut cases = Vec::new();
     while let Some(Token::Pipe) = tokens.peek() {
         tokens.next();
 
         let pat = parse_pattern(tokens)?;
+
+        let guard = match tokens.peek() {
+            Some(Token::Keyword(Keyword::If)) => {
+                tokens.next();
+                Some(Rc::new(parse_expr(tokens)?))
+            }
+            _ => None,
+        };
+
         match tokens.next() {
             Some(Token::Arrow) => (),
             _ => return Err("Expected '->' after pattern".to_string()),
         }
         let case_expr = parse_expr(tokens)?;
-        cases.push((Rc::new(pat), Rc::new(case_expr)));
+        cases.push(MatchCase {
+            pattern: Rc::new(pat),
+            guard,
+            body: Rc::new(case_expr),
+        });
     }
-
-    Ok(Expr::Match(Rc::new(expr), cases))
+    Ok(cases)
 }
 
 fn parse_pattern(
@@ -626,8 +646,9 @@ fn parse_comma_patterns(
 #[cfg(test)]
 mod tests {
     use crate::{
-        e_ap, e_bool, e_ident, e_if, e_int, e_lambda, e_let, e_match, p_bool, p_constructor, p_int,
-        p_var, p_wildcard, t_bool, t_constructor, t_forall, t_fun, t_int, t_type_var,
+        e_ap, e_bool, e_ident, e_if, e_int, e_lambda, e_let, e_match, e_match_case, p_bool,
+        p_constructor, p_int, p_var, p_wildcard, t_bool, t_constructor, t_forall, t_fun, t_int,
+        t_type_var,
     };
     use crate::{e_char, lexer};
 
@@ -821,8 +842,8 @@ mod tests {
             Ok(e_match!(
                 e_ident!("x"),
                 [
-                    (p_constructor!("A"), e_int!(1)),
-                    (p_constructor!("B"), e_int!(2))
+                    e_match_case!(p_constructor!("A"), None, e_int!(1)),
+                    e_match_case!(p_constructor!("B"), None, e_int!(2))
                 ]
             ))
         );
@@ -830,7 +851,8 @@ mod tests {
 
     #[test]
     fn test_match_with_args() {
-        let tokens = lexer::tokenize("match f x with | A 2 -> 1 | B (C _) true x -> 2").unwrap();
+        let tokens =
+            lexer::tokenize("match f x with | A 2 -> 1 | B (C _) true x if x > 0 -> 2").unwrap();
         let mut iter = tokens.into_iter().peekable();
 
         assert_eq!(
@@ -838,14 +860,15 @@ mod tests {
             Ok(e_match!(
                 e_ap!(e_ident!("f"), e_ident!("x")),
                 [
-                    (p_constructor!("A", p_int!(2)), e_int!(1)),
-                    (
+                    e_match_case!(p_constructor!("A", p_int!(2)), None, e_int!(1)),
+                    e_match_case!(
                         p_constructor!(
                             "B",
                             p_constructor!("C", p_wildcard!()),
                             p_bool!(true),
                             p_var!("x")
                         ),
+                        Some(e_ap!(e_ap!(e_ident!(">"), e_ident!("x")), e_int!(0))),
                         e_int!(2)
                     )
                 ]

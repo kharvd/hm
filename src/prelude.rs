@@ -136,7 +136,7 @@ impl Env {
             let rec list_eq = fun xs -> fun ys ->
                 match (xs, ys) with
                 | (Nil, Nil) -> true
-                | (Cons x xs, Cons y ys) -> (x == y) && (list_eq xs ys)
+                | (Cons x xs, Cons y ys) if x == y -> list_eq xs ys
                 | _ -> false
             
             let rec zip = fun xs -> fun ys ->
