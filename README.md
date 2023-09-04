@@ -1,6 +1,6 @@
 # 🤔
 
-🤔 (pronounced "hmm") is an ML-like functional programming language.
+🤔 (pronounced "hmm") is a simplistic functional programming language inspired by OCaml and Haskell.
 
 **Disclaimer: this is a toy project and not intended for production use.**
 
