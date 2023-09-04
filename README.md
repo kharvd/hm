@@ -2,6 +2,8 @@
 
 🤔 (pronounced "hmm") is an ML-like functional programming language.
 
+**Disclaimer: this is a toy project and not intended for production use.**
+
 ## Usage
 
 Run REPL:

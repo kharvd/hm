@@ -97,7 +97,16 @@ impl Display for Value {
                 RefValue::Data(name, args) => match name.as_str() {
                     "Nil" | "Cons" => write_list(f, name, args),
                     s if s.starts_with("Tuple") => write_tuple(f, args),
-                    _ => write!(f, "{}({:?})", name, args),
+                    _ if args.len() == 0 => write!(f, "{}", name),
+                    _ => write!(
+                        f,
+                        "({} {})",
+                        name,
+                        args.iter()
+                            .map(|x| x.to_string())
+                            .collect::<Vec<_>>()
+                            .join(" ")
+                    ),
                 },
             },
         }
