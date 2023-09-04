@@ -24,6 +24,8 @@ $ cargo run
 
 ## Examples
 
+See [prelude](src/prelude.rs) for more examples.
+
 ### Recursion and pattern matching
 
 ```ocaml
