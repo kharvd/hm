@@ -5,6 +5,7 @@
 ## Usage
 
 Run REPL:
+
 ```bash
 $ cargo run
 ```
@@ -84,4 +85,4 @@ let s = sum [1, 2, 3, 4, 5]
 - [ ] Exhaustiveness checking for pattern matching
 - [ ] Compilation (native and/or to JS)
 - [ ] Typeclasses
-- ...
+- [ ] ...
