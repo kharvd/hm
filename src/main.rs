@@ -14,6 +14,18 @@ mod value;
 
 use rustyline::Result;
 
+use clap::Parser;
+
+/// REPL for the 🤔 language
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /// Show timing and memory usage information
+    #[arg(short, long)]
+    profile: bool,
+}
+
 fn main() -> Result<()> {
-    repl::repl()
+    let args = Args::parse();
+    repl::repl(args.profile)
 }

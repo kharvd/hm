@@ -9,8 +9,8 @@ use crate::{env::Env, parser::parse};
 
 const HISTORY_FILE: &str = "hmhistory";
 
-pub fn repl() -> Result<()> {
-    let mut evaluator = Evaluator::new();
+pub fn repl(profile: bool) -> Result<()> {
+    let mut evaluator = Evaluator::new(profile);
 
     let mut rl = DefaultEditor::new()?;
     let _ = rl.load_history(HISTORY_FILE);
@@ -51,12 +51,14 @@ pub fn repl() -> Result<()> {
 
 struct Evaluator {
     env: Env,
+    profile: bool,
 }
 
 impl Evaluator {
-    fn new() -> Self {
+    fn new(profile: bool) -> Self {
         Self {
             env: Env::prelude(),
+            profile,
         }
     }
 
@@ -78,14 +80,19 @@ impl Evaluator {
                 let res = self.env.eval_expr(expr)?;
                 let evaluation_time = start.elapsed();
 
-                format!(
-                    "{} : {}\ntc: {}ms\neval: {}ms\nmemory: {} bytes",
-                    res,
-                    type_expr,
-                    type_checking_time.as_millis(),
-                    evaluation_time.as_millis(),
-                    memory::allocated()
-                )
+                let eval_result = format!("{} : {}", res, type_expr);
+
+                if self.profile {
+                    format!(
+                        "{}\ntc: {}ms\neval: {}ms\nmemory: {} bytes",
+                        eval_result,
+                        type_checking_time.as_millis(),
+                        evaluation_time.as_millis(),
+                        memory::allocated()
+                    )
+                } else {
+                    eval_result
+                }
             }
         })
     }
