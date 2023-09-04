@@ -20,7 +20,16 @@ pub fn repl(profile: bool) -> Result<()> {
         match readline {
             Ok(line) => {
                 rl.add_history_entry(line.as_str())?;
-                match evaluator.eval_line(&line) {
+
+                let line = line.trim();
+                let colon_command = ColonCommand::parse(line);
+
+                let eval_result = match colon_command {
+                    Some(command) => evaluator.eval_colon_command(command),
+                    None => evaluator.eval_line(line),
+                };
+
+                match eval_result {
                     Ok(response) => {
                         println!("{}", response);
                     }
@@ -47,6 +56,23 @@ pub fn repl(profile: bool) -> Result<()> {
     rl.save_history(HISTORY_FILE)?;
 
     Ok(())
+}
+
+enum ColonCommand<'a> {
+    Type(&'a str),
+    Help,
+}
+
+impl<'a> ColonCommand<'a> {
+    fn parse(line: &'a str) -> Option<Self> {
+        if line.starts_with(":t") {
+            Some(ColonCommand::Type(&line[3..]))
+        } else if line.starts_with(":h") {
+            Some(ColonCommand::Help)
+        } else {
+            None
+        }
+    }
 }
 
 struct Evaluator {
@@ -95,5 +121,21 @@ impl Evaluator {
                 }
             }
         })
+    }
+
+    fn eval_colon_command(&mut self, command: ColonCommand) -> std::result::Result<String, String> {
+        match command {
+            ColonCommand::Type(line) => {
+                let expr = parse(line)?;
+                match expr {
+                    parser::ParseResult::Statement(_) => Err("Expected expression".to_string()),
+                    parser::ParseResult::Expression(expr) => {
+                        let type_expr = infer(&self.env, &expr)?;
+                        Ok(format!("{} : {}", expr, type_expr))
+                    }
+                }
+            }
+            ColonCommand::Help => Ok("Type :t <expr> to get the type of an expression".to_string()),
+        }
     }
 }
