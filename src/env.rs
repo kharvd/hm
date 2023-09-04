@@ -25,9 +25,9 @@ impl Debug for Env {
 impl Display for Env {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut vars = self.vars.iter().collect::<Vec<_>>();
-        vars.sort_by_key(|(k, _)| k.clone());
+        vars.sort_by_key(|(k, _)| (*k).clone());
         let mut typings = self.typings.iter().collect::<Vec<_>>();
-        typings.sort_by_key(|(k, _)| k.clone());
+        typings.sort_by_key(|(k, _)| (*k).clone());
         write!(f, "Env {{ vars: {:?}, typings: {:?} }}", vars, typings)
     }
 }
