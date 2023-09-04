@@ -122,7 +122,7 @@ fn eval_expr(expr: Rc<Expr>, env: &Env) -> Result<Value, String> {
     let mut expr = expr;
     let mut env = env.clone();
 
-    loop {
+    'outer: loop {
         match expr.borrow() {
             Expr::Int(i) => return Ok(Value::int(*i)),
             Expr::Bool(b) => return Ok(Value::bool(*b)),
@@ -143,6 +143,7 @@ fn eval_expr(expr: Rc<Expr>, env: &Env) -> Result<Value, String> {
                 } else {
                     expr = if_false.clone();
                 }
+                continue 'outer;
             }
             Expr::Lambda(param_name, body) => {
                 return Ok(Value::func(param_name.clone(), body.clone(), env.clone()))
@@ -154,6 +155,7 @@ fn eval_expr(expr: Rc<Expr>, env: &Env) -> Result<Value, String> {
                 // tail call optimization
                 env = inner_env;
                 expr = in_expr.clone();
+                continue 'outer;
             }
             Expr::Ap(func, arg) => {
                 let func_eval = eval_expr(func.clone(), &env)?;
@@ -171,6 +173,7 @@ fn eval_expr(expr: Rc<Expr>, env: &Env) -> Result<Value, String> {
                             // tail call optimization
                             env = inner_env;
                             expr = body.clone();
+                            continue 'outer;
                         }
                         RefValue::BuiltinFunc(f) => {
                             let arg_eval = eval_expr(arg.clone(), &env)?;
@@ -186,12 +189,14 @@ fn eval_expr(expr: Rc<Expr>, env: &Env) -> Result<Value, String> {
                     _ => return Err(format!("Expected function, got {}", func_eval)),
                 }
             }
-            Expr::Match(expr, patterns) => {
-                let expr_eval = eval_expr(expr.clone(), &env)?;
+            Expr::Match(match_expr, patterns) => {
+                let expr_eval = eval_expr(match_expr.clone(), &env)?;
                 for (choice_pattern, choice_expr) in patterns {
                     if let Some(bound_env) = try_pattern_match(&env, &expr_eval, choice_pattern) {
-                        let choice_expr_eval = eval_expr(choice_expr.clone(), &bound_env)?;
-                        return Ok(choice_expr_eval);
+                        // tail call optimization
+                        expr = choice_expr.clone();
+                        env = bound_env;
+                        continue 'outer;
                     }
                 }
                 return Err(format!("No match for {}", expr_eval));
