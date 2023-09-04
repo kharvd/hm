@@ -75,6 +75,7 @@ let s = sum [1, 2, 3, 4, 5]
 ## TODO
 
 - [ ] Standalone scripts
+- [ ] Proper prelude
 - [ ] Explicit type annotations
 - [ ] `let rec .. in ..` syntax sugar
 - [ ] `match` guards
