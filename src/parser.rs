@@ -260,7 +260,7 @@ fn parse_type_constructor(
 impl InfixOp {
     fn precedence(&self) -> i32 {
         match self {
-            InfixOp::Mult | InfixOp::Div => 20,
+            InfixOp::Mult | InfixOp::Div | InfixOp::Mod => 20,
             InfixOp::Plus | InfixOp::Minus => 10,
             InfixOp::LessThan
             | InfixOp::GreaterThan

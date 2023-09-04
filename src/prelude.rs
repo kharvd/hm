@@ -11,6 +11,7 @@ impl Env {
             .extend_value("-", Value::builtin(IntBinOps::Minus))
             .extend_value("*", Value::builtin(IntBinOps::Mult))
             .extend_value("/", Value::builtin(IntBinOps::Div))
+            .extend_value("%", Value::builtin(IntBinOps::Mod))
             .extend_value("<", Value::builtin(IntBinOps::Lt))
             .extend_value("<=", Value::builtin(IntBinOps::Leq))
             .extend_value(">", Value::builtin(IntBinOps::Gt))
@@ -30,6 +31,7 @@ impl Env {
             val (-) : int -> int -> int
             val (*) : int -> int -> int
             val (/) : int -> int -> int
+            val (%) : int -> int -> int
             val (<) : int -> int -> bool
             val (<=) : int -> int -> bool
             val (>) : int -> int -> bool
@@ -79,7 +81,7 @@ impl Env {
                 match xs with
                 | Nil -> Nil
                 | Cons x xs -> Cons (f x) (map f xs)
-            
+
             let rec foldl = fun f -> fun acc -> fun xs ->
                 match xs with
                 | Nil -> acc
@@ -114,9 +116,13 @@ impl Env {
             
             let rec reverse = fun xs -> foldl (fun acc -> fun x -> Cons x acc) Nil xs
 
-            let rec range = fun n ->
-                if n == 0 then Nil else
-                Cons (n - 1) (range (n - 1))
+            let range = let
+                range_rec = fix fun range_rec -> 
+                    fun acc -> fun n -> 
+                        match n with
+                        | 0 -> acc
+                        | _ -> range_rec (Cons (n - 1) acc) (n - 1)
+                in range_rec Nil
 
             let head = fun xs ->
                 match xs with
@@ -156,13 +162,17 @@ impl Env {
                     putc '\n'
                 ]
             
-            let rec fibrec = fun n -> fun a -> fun b ->
-                if n == 0 then a else fibrec (n - 1) b (a + b)
+            let intToString = fun n ->
+                let intToString_rec = fix fun intToString_rec -> fun acc -> fun n ->
+                    if n == 0 then acc else
+                    intToString_rec (Cons (chr (ord '0' + (n % 10))) acc) (n / 10)
+                in
+                    if n == 0 
+                    then \"0\" 
+                    else if n < 0 
+                         then cons '-' (intToString_rec Nil (neg n))
+                         else intToString_rec Nil n
             
-            let fib = fun n -> fibrec n 0 1
-
-            let rec sum_range = fun n -> fun acc ->
-                if n == 0 then acc else sum_range (n - 1) (acc + n)
         ";
 
         env.eval_file(prelude_source).unwrap()

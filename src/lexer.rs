@@ -27,6 +27,7 @@ pub enum InfixOp {
     Minus,
     Mult,
     Div,
+    Mod,
     Equals,
     NotEquals,
     LessThan,
@@ -44,6 +45,7 @@ impl InfixOp {
             InfixOp::Minus => "-",
             InfixOp::Mult => "*",
             InfixOp::Div => "/",
+            InfixOp::Mod => "%",
             InfixOp::Equals => "==",
             InfixOp::NotEquals => "!=",
             InfixOp::LessThan => "<",
@@ -270,6 +272,10 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, String> {
             }
             '/' => {
                 tokens.push(Token::InfixOp(InfixOp::Div));
+                chars.next();
+            }
+            '%' => {
+                tokens.push(Token::InfixOp(InfixOp::Mod));
                 chars.next();
             }
             ' ' | '\t' | '\n' | '\r' => {
