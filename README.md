@@ -87,6 +87,7 @@ let s = sum [1, 2, 3, 4, 5]
 - [ ] Multi-argument lambdas
 - [ ] `let` bindings with arguments
 - [ ] Better error messages
+- [ ] Prettier pretty-printer
 - [ ] Exhaustiveness checking for pattern matching
 - [ ] Compilation (native and/or to JS)
 - [ ] Typeclasses
