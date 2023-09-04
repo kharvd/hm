@@ -196,6 +196,14 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, String> {
                 if let Some('>') = chars.peek() {
                     tokens.push(Token::Arrow);
                     chars.next();
+                } else if let Some('-') = chars.peek() {
+                    // single line comment `-- ... \n`
+                    while let Some(&ch) = chars.peek() {
+                        if ch == '\n' {
+                            break;
+                        }
+                        chars.next();
+                    }
                 } else {
                     tokens.push(Token::InfixOp(InfixOp::Minus));
                 }
@@ -277,6 +285,25 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, String> {
             '%' => {
                 tokens.push(Token::InfixOp(InfixOp::Mod));
                 chars.next();
+            }
+            '{' => {
+                // multiline comments `{- ... -}`
+                chars.next();
+                if let Some('-') = chars.peek() {
+                    chars.next();
+                    while let Some(&ch) = chars.peek() {
+                        if ch == '-' {
+                            chars.next();
+                            if let Some('}') = chars.peek() {
+                                chars.next();
+                                break;
+                            }
+                        }
+                        chars.next();
+                    }
+                } else {
+                    return Err("Unexpected sequence after '{'".to_string());
+                }
             }
             ' ' | '\t' | '\n' | '\r' => {
                 chars.next(); // Just skip whitespace
