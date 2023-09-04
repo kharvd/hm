@@ -89,6 +89,7 @@ let s = sum [1, 2, 3, 4, 5]
 - [ ] Better error messages
 - [ ] Prettier pretty-printer
 - [ ] Exhaustiveness checking for pattern matching
+- [ ] String interning for identifiers
 - [ ] Compilation (native and/or to JS)
 - [ ] Typeclasses
 - [ ] ...
