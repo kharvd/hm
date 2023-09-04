@@ -21,8 +21,8 @@ impl Env {
         })
     }
 
-    pub fn eval_expr(&self, expr: &Expr) -> Result<Value, String> {
-        expr.eval(self)
+    pub fn eval_expr(&self, expr: Expr) -> Result<Value, String> {
+        eval_expr(Rc::new(expr), &self)
     }
 
     pub fn eval_file(&self, file: &str) -> Result<Env, String> {
@@ -40,7 +40,7 @@ impl Statement {
         Ok(match self {
             Statement::Let(name, expr) => {
                 let var_type = infer(env, &expr)?;
-                let value = expr.eval(env)?;
+                let value = eval_expr(expr.clone(), env)?;
                 env.extend_type(&name, var_type.clone())
                     .extend_value(&name, value)
             }
@@ -118,79 +118,90 @@ fn constructor_for_variant(
     Ok((constructor_name.clone(), constructor_type))
 }
 
-impl Expr {
-    fn eval(&self, env: &Env) -> Result<Value, String> {
-        match self {
-            Expr::Int(i) => Ok(Value::int(*i)),
-            Expr::Bool(b) => Ok(Value::bool(*b)),
-            Expr::Char(c) => Ok(Value::char(*c)),
+fn eval_expr(expr: Rc<Expr>, env: &Env) -> Result<Value, String> {
+    let mut expr = expr;
+    let mut env = env.clone();
+
+    loop {
+        match expr.borrow() {
+            Expr::Int(i) => return Ok(Value::int(*i)),
+            Expr::Bool(b) => return Ok(Value::bool(*b)),
+            Expr::Char(c) => return Ok(Value::char(*c)),
             Expr::Ident(name) => {
                 let value = env.resolve_value(&name)?;
                 let Some(value) = value else {
                     return Err(format!("Infinite loop: {}", name));
                 };
-                Ok(value)
+                return Ok(value);
             }
             Expr::If(cond, if_true, if_false) => {
-                let cond = cond.eval(env)?;
+                let cond = eval_expr(cond.clone(), &env)?;
+
+                // tail call optimization
                 if cond.as_bool()? {
-                    if_true.eval(env)
+                    expr = if_true.clone();
                 } else {
-                    if_false.eval(env)
+                    expr = if_false.clone();
                 }
             }
             Expr::Lambda(param_name, body) => {
-                Ok(Value::func(param_name.clone(), body.clone(), env.clone()))
+                return Ok(Value::func(param_name.clone(), body.clone(), env.clone()))
             }
-            Expr::Let(name, bound_expr, expr) => {
-                let bound_value = bound_expr.eval(env)?;
+            Expr::Let(name, bound_expr, in_expr) => {
+                let bound_value = eval_expr(bound_expr.clone(), &env)?;
                 let inner_env = env.extend_value(&name, bound_value);
-                expr.eval(&inner_env)
+
+                // tail call optimization
+                env = inner_env;
+                expr = in_expr.clone();
             }
             Expr::Ap(func, arg) => {
-                let func_eval = func.eval(env)?;
+                let func_eval = eval_expr(func.clone(), &env)?;
                 match &func_eval {
-                    Value::Fix => apply_fix(arg, env),
+                    Value::Fix => return apply_fix(arg, &env),
                     Value::RefValue(ref_value) => match ref_value.borrow() {
                         RefValue::Func {
                             param,
                             body,
                             closure,
                         } => {
-                            let arg_eval = arg.eval(env)?;
+                            let arg_eval = eval_expr(arg.clone(), &env)?;
                             let inner_env = closure.extend_value(&param, arg_eval);
-                            body.eval(&inner_env)
+
+                            // tail call optimization
+                            env = inner_env;
+                            expr = body.clone();
                         }
                         RefValue::BuiltinFunc(f) => {
-                            let arg_eval = arg.eval(env)?;
-                            f.eval(arg_eval)
+                            let arg_eval = eval_expr(arg.clone(), &env)?;
+                            return f.eval(arg_eval);
                         }
                         RefValue::Data(name, args) => {
-                            let arg_eval = arg.eval(env)?;
+                            let arg_eval = eval_expr(arg.clone(), &env)?;
                             let mut new_args = args.clone();
                             new_args.push(arg_eval);
-                            Ok(Value::data(name.clone(), new_args))
+                            return Ok(Value::data(name.clone(), new_args));
                         }
                     },
-                    _ => Err(format!("Expected function, got {}", func_eval)),
+                    _ => return Err(format!("Expected function, got {}", func_eval)),
                 }
             }
             Expr::Match(expr, patterns) => {
-                let eval_expr = expr.eval(env)?;
+                let expr_eval = eval_expr(expr.clone(), &env)?;
                 for (choice_pattern, choice_expr) in patterns {
-                    if let Some(bound_env) = try_pattern_match(env, &eval_expr, choice_pattern) {
-                        let choice_expr_eval = choice_expr.eval(&bound_env)?;
+                    if let Some(bound_env) = try_pattern_match(&env, &expr_eval, choice_pattern) {
+                        let choice_expr_eval = eval_expr(choice_expr.clone(), &bound_env)?;
                         return Ok(choice_expr_eval);
                     }
                 }
-                Err(format!("No match for {}", eval_expr))
+                return Err(format!("No match for {}", expr_eval));
             }
         }
     }
 }
 
 fn apply_fix(arg: &Rc<Expr>, env: &Env) -> Result<Value, String> {
-    let arg_eval = arg.eval(env)?.as_ref_value()?;
+    let arg_eval = eval_expr(arg.clone(), env)?.as_ref_value()?;
     match arg_eval.borrow() {
         RefValue::Func {
             param,
@@ -198,7 +209,7 @@ fn apply_fix(arg: &Rc<Expr>, env: &Env) -> Result<Value, String> {
             closure,
         } => {
             let fun = Rc::new(RefCell::new(None));
-            let body_eval = body.eval(&closure.extend_thunk(&param, fun.clone()))?;
+            let body_eval = eval_expr(body.clone(), &closure.extend_thunk(&param, fun.clone()))?;
             fun.replace(Some(body_eval.clone()));
             Ok(body_eval)
         }
@@ -233,7 +244,7 @@ mod tests {
     }
 
     fn eval_env(env: &Env, s: &str) -> Value {
-        env.eval_expr(&parse_expr(s)).unwrap()
+        env.eval_expr(parse_expr(s)).unwrap()
     }
 
     macro_rules! assert_same_value {

@@ -154,7 +154,15 @@ impl Env {
                 do [
                     putStr s,
                     putc '\n'
-                ]  
+                ]
+            
+            let rec fibrec = fun n -> fun a -> fun b ->
+                if n == 0 then a else fibrec (n - 1) b (a + b)
+            
+            let fib = fun n -> fibrec n 0 1
+
+            let rec sum_range = fun n -> fun acc ->
+                if n == 0 then acc else sum_range (n - 1) (acc + n)
         ";
 
         env.eval_file(prelude_source).unwrap()

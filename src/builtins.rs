@@ -59,10 +59,10 @@ impl BinOp for IntBinOps {
         let arg1 = arg1.as_int()?;
         let arg2 = arg2.as_int()?;
         Ok(match self {
-            IntBinOps::Plus => Value::Int(arg1 + arg2),
-            IntBinOps::Minus => Value::Int(arg1 - arg2),
-            IntBinOps::Mult => Value::Int(arg1 * arg2),
-            IntBinOps::Div => Value::Int(arg1 / arg2),
+            IntBinOps::Plus => Value::Int(arg1.wrapping_add(arg2)),
+            IntBinOps::Minus => Value::Int(arg1.wrapping_sub(arg2)),
+            IntBinOps::Mult => Value::Int(arg1.wrapping_mul(arg2)),
+            IntBinOps::Div => Value::Int(arg1.wrapping_div(arg2)),
             IntBinOps::Lt => Value::Bool(arg1 < arg2),
             IntBinOps::Leq => Value::Bool(arg1 <= arg2),
             IntBinOps::Gt => Value::Bool(arg1 > arg2),

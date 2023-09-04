@@ -52,9 +52,24 @@ fn eval_line(env: &Env, line: &str) -> Result<(String, Env), String> {
             (format!("{}", statement), new_env)
         }
         parser::ParseResult::Expression(expr) => {
+            let start = std::time::Instant::now();
             let type_expr = infer(env, &expr)?;
-            let res = env.eval_expr(&expr)?;
-            (format!("{} : {}", res, type_expr), env.clone())
+            let type_checking_time = start.elapsed();
+
+            let start = std::time::Instant::now();
+            let res = env.eval_expr(expr)?;
+            let evaluation_time = start.elapsed();
+
+            (
+                format!(
+                    "{} : {}\ntc: {}ms\neval: {}ms",
+                    res,
+                    type_expr,
+                    type_checking_time.as_millis(),
+                    evaluation_time.as_millis()
+                ),
+                env.clone(),
+            )
         }
     })
 }
