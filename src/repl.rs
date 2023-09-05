@@ -60,6 +60,8 @@ pub fn repl(profile: bool) -> Result<()> {
 
 enum ColonCommand<'a> {
     Type(&'a str),
+    Debug(&'a str),
+    DebugEval(&'a str),
     Help,
 }
 
@@ -69,6 +71,10 @@ impl<'a> ColonCommand<'a> {
             Some(ColonCommand::Type(&line[3..]))
         } else if line.starts_with(":h") {
             Some(ColonCommand::Help)
+        } else if line.starts_with(":e") {
+            Some(ColonCommand::DebugEval(&line[3..]))
+        } else if line.starts_with(":d") {
+            Some(ColonCommand::Debug(&line[3..]))
         } else {
             None
         }
@@ -135,7 +141,26 @@ impl Evaluator {
                     }
                 }
             }
-            ColonCommand::Help => Ok("Type :t <expr> to get the type of an expression".to_string()),
+            ColonCommand::Debug(line) => {
+                let expr = parse(line)?;
+                Ok(format!("{:#?}", expr))
+            }
+            ColonCommand::DebugEval(line) => {
+                let result = parse(line)?;
+                match result {
+                    parser::ParseResult::Statement(_) => Err("Expected expression".to_string()),
+                    parser::ParseResult::Expression(expr) => {
+                        let res = self.env.eval_expr(expr)?;
+                        Ok(format!("{:#?}", res))
+                    }
+                }
+            }
+            ColonCommand::Help => Ok("Available commands:\n\
+                    :t <expr> - typecheck expression\n\
+                    :d <expr> - print expression / statement AST\n\
+                    :e <expr> - evaluate expression without typechecking and print result\n\
+                    :h - show this help message"
+                .to_string()),
         }
     }
 }

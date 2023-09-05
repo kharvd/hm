@@ -53,9 +53,18 @@ impl Debug for RefValue {
                 param,
                 body,
                 closure,
-            } => write!(f, "Func({:?}, {:?}, {:?})", param, body, closure),
+            } => f
+                .debug_struct("Func")
+                .field("param", param)
+                .field("body", body)
+                .field("closure", closure)
+                .finish(),
             RefValue::BuiltinFunc(_) => write!(f, "BuiltinFunc"),
-            RefValue::Data(name, args) => write!(f, "{}({:?})", name, args),
+            RefValue::Data(name, args) => f
+                .debug_struct("Data")
+                .field("name", name)
+                .field("args", args)
+                .finish(),
         }
     }
 }
@@ -95,8 +104,9 @@ impl Display for Value {
                 RefValue::Func { .. } => write!(f, "<function>"),
                 RefValue::BuiltinFunc(_) => write!(f, "<built-in>"),
                 RefValue::Data(name, args) => match name.as_str() {
-                    "Nil" | "Cons" => write_list(f, name, args),
-                    s if s.starts_with("Tuple") => write_tuple(f, args),
+                    "Nil" => write_list(f, name, args),
+                    "Cons" if args.len() == 2 => write_list(f, name, args),
+                    s if s.starts_with("Tuple") => write_tuple(f, s, args),
                     _ if args.len() == 0 => write!(f, "{}", name),
                     _ => write!(
                         f,
@@ -154,6 +164,10 @@ fn write_list(
         return write!(f, "[]");
     }
 
+    if args.len() != 2 {
+        return Err(std::fmt::Error);
+    }
+
     if let Value::Char(_) = args[0].borrow() {
         return write_string(f, name, args);
     }
@@ -189,8 +203,34 @@ fn write_string(
     Ok(())
 }
 
-fn write_tuple(f: &mut std::fmt::Formatter, args: &Vec<Value>) -> Result<(), std::fmt::Error> {
-    write!(f, "({})", args.into_iter().join(", "))
+fn write_tuple(
+    f: &mut std::fmt::Formatter,
+    constructor_name: &str,
+    args: &Vec<Value>,
+) -> Result<(), std::fmt::Error> {
+    let arity = constructor_name
+        .chars()
+        .skip_while(|c| !c.is_digit(10))
+        .take_while(|c| c.is_digit(10))
+        .collect::<String>()
+        .parse::<usize>()
+        .map_err(|_| std::fmt::Error)?;
+
+    write!(f, "(")?;
+
+    for i in 0..arity {
+        if i > 0 {
+            write!(f, ", ")?;
+        }
+
+        if i < args.len() {
+            write!(f, "{}", args[i])?;
+        } else {
+            write!(f, "_")?;
+        }
+    }
+
+    write!(f, ")")
 }
 
 impl Value {
@@ -207,7 +247,6 @@ impl Value {
     }
 
     pub fn func(param: String, body: Rc<Expr>, closure: Env) -> Self {
-        // println!("allocating func");
         Value::RefValue(Rc::new(RefValue::Func {
             param,
             body,
@@ -216,12 +255,10 @@ impl Value {
     }
 
     pub fn builtin<T: BuiltinFunc + 'static>(f: T) -> Self {
-        // println!("allocating builtin");
         Value::RefValue(Rc::new(RefValue::BuiltinFunc(Rc::new(f))))
     }
 
     pub fn data(name: String, args: Vec<Value>) -> Self {
-        // println!("allocating data");
         Value::RefValue(Rc::new(RefValue::Data(name, args)))
     }
 

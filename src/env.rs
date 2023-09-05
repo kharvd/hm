@@ -18,7 +18,17 @@ pub struct Env {
 
 impl Debug for Env {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Env").finish()
+        f.debug_map()
+            .entries(self.vars.into_iter().map(|(k, v)| {
+                (
+                    k,
+                    v.borrow()
+                        .as_ref()
+                        .map(|o| o.to_string())
+                        .unwrap_or("None".to_string()),
+                )
+            }))
+            .finish()
     }
 }
 
