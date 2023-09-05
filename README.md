@@ -81,7 +81,7 @@ let s = sum [1, 2, 3, 4, 5]
 - [ ] Standalone scripts
 - [ ] Proper prelude
 - [ ] Explicit type annotations
-- [ ] `let rec .. in ..` syntax sugar
+- [x] `let rec .. in ..` syntax sugar
 - [x] `match` guards
 - [ ] Mutually recursive functions (currently supported with explicit `fix`)
 - [ ] Multi-argument lambdas

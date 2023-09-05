@@ -116,12 +116,11 @@ impl Env {
             
             let rec reverse = fun xs -> foldl (fun acc -> fun x -> Cons x acc) Nil xs
 
-            let range = let
-                range_rec = fix fun range_rec -> 
-                    fun acc -> fun n -> 
-                        match n with
-                        | 0 -> acc
-                        | _ -> range_rec (Cons (n - 1) acc) (n - 1)
+            let range = 
+                let rec range_rec = fun acc -> fun n -> 
+                    match n with
+                    | 0 -> acc
+                    | _ -> range_rec (Cons (n - 1) acc) (n - 1)
                 in range_rec Nil
 
             let head = fun xs ->
@@ -163,7 +162,7 @@ impl Env {
                 ]
             
             let intToString = fun n ->
-                let intToString_rec = fix fun intToString_rec -> fun acc -> fun n ->
+                let rec intToString_rec = fun acc -> fun n ->
                     if n == 0 then acc else
                     intToString_rec (Cons (chr (ord '0' + (n % 10))) acc) (n / 10)
                 in

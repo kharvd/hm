@@ -464,6 +464,14 @@ fn parse_if_expr(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<E
 }
 
 fn parse_let_expr(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<Expr, String> {
+    let is_rec = match tokens.peek() {
+        Some(Token::Keyword(Keyword::Rec)) => {
+            tokens.next();
+            true
+        }
+        _ => false,
+    };
+
     let name = match tokens.next() {
         Some(Token::Variable(name)) => name,
         _ => return Err("Expected identifier after 'let'".to_string()),
@@ -483,7 +491,18 @@ fn parse_let_expr(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<
 
     let expr = parse_expr(tokens)?;
 
-    Ok(Expr::Let(name, Rc::new(bound_expr), Rc::new(expr)))
+    if is_rec {
+        Ok(Expr::Let(
+            name.clone(),
+            Rc::new(Expr::Ap(
+                Rc::new(Expr::Ident("fix".to_string())),
+                Rc::new(Expr::Lambda(name, Rc::new(bound_expr))),
+            )),
+            Rc::new(expr),
+        ))
+    } else {
+        Ok(Expr::Let(name, Rc::new(bound_expr), Rc::new(expr)))
+    }
 }
 
 fn parse_match_expr(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<Expr, String> {
@@ -776,6 +795,24 @@ mod tests {
                 "x",
                 e_ap!(e_ident!("f"), e_ident!("y")),
                 e_ap!(e_ident!("x"), e_int!(5))
+            ))
+        );
+    }
+
+    #[test]
+    fn test_let_rec_expression() {
+        let tokens = lexer::tokenize("let rec f = fun n -> f n in f").unwrap();
+        let mut iter = tokens.into_iter().peekable();
+
+        assert_eq!(
+            parse_expr(&mut iter),
+            Ok(e_let!(
+                "f",
+                e_ap!(
+                    e_ident!("fix"),
+                    e_lambda!("f", e_lambda!("n", e_ap!(e_ident!("f"), e_ident!("n"))))
+                ),
+                e_ident!("f")
             ))
         );
     }
