@@ -31,7 +31,7 @@ See [prelude](src/prelude.rs) for more examples.
 ### Recursion and pattern matching
 
 ```ocaml
-let rec fib = fun n ->
+let rec fib n =
   match n with
   | 0 -> 0
   | 1 -> 1
@@ -43,8 +43,8 @@ let rec fib = fun n ->
 `putStrLn` is a built-in impure function that prints a string to stdout.
 
 ```ocaml
-let fizzbuzz = fun n ->
-    let fb = fun n ->
+let fizzbuzz n =
+    let fb n =
         match (n % 3, n % 5) with
         | (0, 0) -> putStrLn "FizzBuzz"
         | (0, _) -> putStrLn "Fizz"
@@ -59,7 +59,7 @@ let fizzbuzz = fun n ->
 ```ocaml
 data Maybe a = Just a | Nothing
 
-let map = fun f xs ->
+let map f xs =
     match xs with
     | Just x -> Just (f x)
     | Nothing -> Nothing
@@ -68,7 +68,7 @@ let map = fun f xs ->
 ### Lists
 
 ```ocaml
-let rec sum = fun xs ->
+let rec sum xs =
     match xs with
     | Nil -> 0
     | Cons x xs -> x + sum xs
@@ -85,7 +85,7 @@ let s = sum [1, 2, 3, 4, 5]
 - [x] `match` guards
 - [ ] Mutually recursive functions (currently supported with explicit `fix`)
 - [x] Multi-argument lambdas
-- [ ] `let` bindings with arguments
+- [x] `let` bindings with arguments
 - [ ] Better error messages
 - [ ] Prettier pretty-printer
 - [ ] Exhaustiveness checking for pattern matching

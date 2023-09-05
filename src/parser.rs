@@ -140,13 +140,27 @@ fn parse_let_name_binding(
     tokens: &mut Peekable<impl Iterator<Item = Token>>,
 ) -> Result<(String, Rc<Expr>), String> {
     let name = parse_binding_name(tokens)?;
+    let params = parse_ident_list(tokens);
 
     match tokens.next() {
         Some(Token::Equals) => (),
         _ => return Err("Expected '=' after identifier".to_string()),
     }
+
     let expr = parse_expr(tokens)?;
-    Ok((name, Rc::new(expr)))
+
+    // unroll lambda parameters into nested lambdas
+    let expr_lambdas = nest_lambdas(params, expr);
+
+    Ok((name, Rc::new(expr_lambdas)))
+}
+
+fn nest_lambdas(params: Vec<String>, expr: Expr) -> Expr {
+    let mut expr = expr;
+    for param in params.into_iter().rev() {
+        expr = Expr::Lambda(param, Rc::new(expr));
+    }
+    expr
 }
 
 fn parse_binding_name(
@@ -437,6 +451,22 @@ fn parse_comma_exprs(
 
 fn parse_lambda_expr(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<Expr, String> {
     // parse lambda parameters as a vec
+    let params = parse_ident_list(tokens);
+
+    match tokens.next() {
+        Some(Token::Arrow) => (),
+        _ => return Err("Expected '->' after parameter".to_string()),
+    }
+
+    let body = parse_expr(tokens)?;
+
+    // unroll lambda parameters into nested lambdas
+    let expr_lambdas = nest_lambdas(params, body);
+
+    Ok(expr_lambdas)
+}
+
+fn parse_ident_list(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Vec<String> {
     let mut params = Vec::new();
     loop {
         match tokens.peek() {
@@ -449,20 +479,7 @@ fn parse_lambda_expr(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Resu
             _ => break,
         }
     }
-
-    match tokens.next() {
-        Some(Token::Arrow) => (),
-        _ => return Err("Expected '->' after parameter".to_string()),
-    }
-    let body = parse_expr(tokens)?;
-
-    // unroll lambda parameters into nested lambdas
-    let mut lambda = body;
-    for param in params.into_iter().rev() {
-        lambda = Expr::Lambda(param, Rc::new(lambda));
-    }
-
-    Ok(lambda)
+    params
 }
 
 fn parse_if_expr(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<Expr, String> {
@@ -489,17 +506,7 @@ fn parse_let_expr(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<
         _ => false,
     };
 
-    let name = match tokens.next() {
-        Some(Token::Variable(name)) => name,
-        _ => return Err("Expected identifier after 'let'".to_string()),
-    };
-
-    match tokens.next() {
-        Some(Token::Equals) => (),
-        _ => return Err("Expected '=' after identifier".to_string()),
-    }
-
-    let bound_expr = parse_expr(tokens)?;
+    let (name, bound_expr) = parse_let_name_binding(tokens)?;
 
     match tokens.next() {
         Some(Token::Keyword(Keyword::In)) => (),
@@ -513,12 +520,12 @@ fn parse_let_expr(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<
             name.clone(),
             Rc::new(Expr::Ap(
                 Rc::new(Expr::Ident("fix".to_string())),
-                Rc::new(Expr::Lambda(name, Rc::new(bound_expr))),
+                Rc::new(Expr::Lambda(name, bound_expr)),
             )),
             Rc::new(expr),
         ))
     } else {
-        Ok(Expr::Let(name, Rc::new(bound_expr), Rc::new(expr)))
+        Ok(Expr::Let(name, bound_expr, Rc::new(expr)))
     }
 }
 
@@ -819,6 +826,26 @@ mod tests {
     }
 
     #[test]
+    fn test_let_statement_params() {
+        let tokens = lexer::tokenize("let f x y = plus x y").unwrap();
+        let mut iter = tokens.into_iter().peekable();
+
+        assert_eq!(
+            parse_statement(&mut iter),
+            Ok(Statement::Let(
+                "f".to_string(),
+                Rc::new(e_lambda!(
+                    "x",
+                    e_lambda!(
+                        "y",
+                        e_ap!(e_ap!(e_ident!("plus"), e_ident!("x")), e_ident!("y"))
+                    )
+                ))
+            ))
+        );
+    }
+
+    #[test]
     fn test_let_expression() {
         let tokens = lexer::tokenize("let x = f y in x 5").unwrap();
         let mut iter = tokens.into_iter().peekable();
@@ -829,6 +856,27 @@ mod tests {
                 "x",
                 e_ap!(e_ident!("f"), e_ident!("y")),
                 e_ap!(e_ident!("x"), e_int!(5))
+            ))
+        );
+    }
+
+    #[test]
+    fn test_let_expression_params() {
+        let tokens = lexer::tokenize("let f x y = plus x y in f 1 2").unwrap();
+        let mut iter = tokens.into_iter().peekable();
+
+        assert_eq!(
+            parse_expr(&mut iter),
+            Ok(e_let!(
+                "f",
+                e_lambda!(
+                    "x",
+                    e_lambda!(
+                        "y",
+                        e_ap!(e_ap!(e_ident!("plus"), e_ident!("x")), e_ident!("y"))
+                    )
+                ),
+                e_ap!(e_ap!(e_ident!("f"), e_int!(1)), e_int!(2))
             ))
         );
     }
