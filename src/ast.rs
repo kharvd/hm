@@ -86,7 +86,6 @@ impl TypeExpr {
 #[derive(Debug, PartialEq, Clone)]
 pub enum Statement {
     Let(String, Rc<Expr>),
-    LetRec(String, Rc<Expr>),
     Val(String, Rc<TypeExpr>),
     Data(String, Vec<String>, Vec<TypeExpr>),
 }

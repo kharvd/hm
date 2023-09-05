@@ -260,10 +260,6 @@ impl Display for Statement {
                 write!(f, "let {} = ", name)?;
                 expr.pretty_print(f, 0, 2)
             }
-            Statement::LetRec(name, expr) => {
-                write!(f, "let rec {} = ", name)?;
-                expr.pretty_print(f, 0, 2)
-            }
             Statement::Val(name, ty) => write!(f, "val {} : {}", name, ty),
             Statement::Data(name, args, variants) => {
                 write!(

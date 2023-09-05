@@ -44,13 +44,6 @@ impl Statement {
                 env.extend_type(&name, var_type.clone())
                     .extend_value(&name, value)
             }
-            Statement::LetRec(name, expr) => {
-                let binding = Expr::Ap(
-                    Rc::new(Expr::Ident(String::from("fix"))),
-                    Rc::new(Expr::Lambda(name.clone(), expr.clone())),
-                );
-                Statement::Let(name.clone(), Rc::new(binding)).eval(env)?
-            }
             Statement::Val(name, type_expr) => {
                 let generalized_type_expr = match type_expr.borrow() {
                     TypeExpr::Forall(vars, expr) => {

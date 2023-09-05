@@ -67,11 +67,28 @@ fn parse_let_statement(
 ) -> Result<Statement, String> {
     tokens.next();
 
+    let is_rec = match tokens.peek() {
+        Some(Token::Keyword(Keyword::Rec)) => {
+            tokens.next();
+            true
+        }
+        _ => false,
+    };
+
     match tokens.peek() {
-        Some(Token::Keyword(Keyword::Rec)) => parse_let_rec_statement(tokens),
         Some(Token::Variable(_)) | Some(Token::LParen) => {
             let (name, expr) = parse_let_name_binding(tokens)?;
-            Ok(Statement::Let(name, expr))
+            if is_rec {
+                Ok(Statement::Let(
+                    name.clone(),
+                    Rc::new(Expr::Ap(
+                        Rc::new(Expr::Ident("fix".to_string())),
+                        Rc::new(Expr::Lambda(name, expr)),
+                    )),
+                ))
+            } else {
+                Ok(Statement::Let(name, expr))
+            }
         }
         _ => return Err("Expected identifier or 'rec' after 'let'".to_string()),
     }
@@ -125,15 +142,6 @@ fn parse_data_variants(
         }
     }
     Ok(variants)
-}
-
-fn parse_let_rec_statement(
-    tokens: &mut Peekable<impl Iterator<Item = Token>>,
-) -> Result<Statement, String> {
-    tokens.next();
-
-    let (name, expr) = parse_let_name_binding(tokens)?;
-    Ok(Statement::LetRec(name, expr))
 }
 
 fn parse_let_name_binding(
