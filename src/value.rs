@@ -92,7 +92,7 @@ impl Display for Value {
             Value::Char(c) => write!(f, "{}", c),
             Value::Fix => write!(f, "fix"),
             Value::RefValue(r) => match r.borrow() {
-                RefValue::Func { param, body, .. } => write!(f, "(fun {} -> {})", param, body),
+                RefValue::Func { .. } => write!(f, "<function>"),
                 RefValue::BuiltinFunc(_) => write!(f, "<built-in>"),
                 RefValue::Data(name, args) => match name.as_str() {
                     "Nil" | "Cons" => write_list(f, name, args),
