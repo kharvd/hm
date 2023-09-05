@@ -71,23 +71,23 @@ impl Env {
             
             data List a = Nil | Cons a (List a)
             let nil = Nil
-            let cons = fun x -> fun xs -> Cons x xs
+            let cons = Cons
             let rec len = fun xs -> 
                 match xs with 
                 | Nil -> 0 
                 | Cons x xs -> 1 + (len xs)
 
-            let rec map = fun f -> fun xs ->
+            let rec map = fun f xs ->
                 match xs with
                 | Nil -> Nil
                 | Cons x xs -> Cons (f x) (map f xs)
 
-            let rec foldl = fun f -> fun acc -> fun xs ->
+            let rec foldl = fun f acc xs ->
                 match xs with
                 | Nil -> acc
                 | Cons x xs -> foldl f (f acc x) xs
 
-            let rec foldr = fun f -> fun acc -> fun xs ->
+            let rec foldr = fun f acc xs ->
                 match xs with
                 | Nil -> acc
                 | Cons x xs -> f x (foldr f acc xs)
@@ -97,27 +97,27 @@ impl Env {
             let rec all = fun xs -> foldl (&&) true xs
             let rec any = fun xs -> foldl (||) false xs
 
-            let rec take = fun n -> fun xs ->
+            let rec take = fun n xs ->
                 if n == 0 then Nil else
                 match xs with
                 | Nil -> Nil
                 | Cons x xs -> Cons x (take (n - 1) xs)
             
-            let rec drop = fun n -> fun xs ->
+            let rec drop = fun n xs ->
                 if n == 0 then xs else
                 match xs with
                 | Nil -> Nil
                 | Cons x xs -> drop (n - 1) xs
             
-            let rec append = fun xs -> fun ys ->
+            let rec append = fun xs ys ->
                 match xs with
                 | Nil -> ys
                 | Cons x xs -> Cons x (append xs ys)
             
-            let rec reverse = fun xs -> foldl (fun acc -> fun x -> Cons x acc) Nil xs
+            let rec reverse = fun xs -> foldl (fun acc x -> Cons x acc) Nil xs
 
             let range = 
-                let rec range_rec = fun acc -> fun n -> 
+                let rec range_rec = fun acc n -> 
                     match n with
                     | 0 -> acc
                     | _ -> range_rec (Cons (n - 1) acc) (n - 1)
@@ -132,13 +132,13 @@ impl Env {
                 | Nil -> Nil
                 | Cons x rest -> rest 
             
-            let rec list_eq = fun xs -> fun ys ->
+            let rec list_eq = fun xs ys ->
                 match (xs, ys) with
                 | (Nil, Nil) -> true
                 | (Cons x xs, Cons y ys) if x == y -> list_eq xs ys
                 | _ -> false
             
-            let rec zip = fun xs -> fun ys ->
+            let rec zip = fun xs ys ->
                 match (xs, ys) with
                 | (Nil, Nil) -> Nil
                 | (Cons x xs, Cons y ys) -> Cons (Tuple2 x y) (zip xs ys)
@@ -162,7 +162,7 @@ impl Env {
                 ]
             
             let intToString = fun n ->
-                let rec intToString_rec = fun acc -> fun n ->
+                let rec intToString_rec = fun acc n ->
                     if n == 0 then acc else
                     intToString_rec (Cons (chr (ord '0' + (n % 10))) acc) (n / 10)
                 in

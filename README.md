@@ -59,7 +59,7 @@ let fizzbuzz = fun n ->
 ```ocaml
 data Maybe a = Just a | Nothing
 
-let map = fun f -> fun xs ->
+let map = fun f xs ->
     match xs with
     | Just x -> Just (f x)
     | Nothing -> Nothing
@@ -84,7 +84,7 @@ let s = sum [1, 2, 3, 4, 5]
 - [x] `let rec .. in ..` syntax sugar
 - [x] `match` guards
 - [ ] Mutually recursive functions (currently supported with explicit `fix`)
-- [ ] Multi-argument lambdas
+- [x] Multi-argument lambdas
 - [ ] `let` bindings with arguments
 - [ ] Better error messages
 - [ ] Prettier pretty-printer

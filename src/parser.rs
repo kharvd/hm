@@ -436,16 +436,33 @@ fn parse_comma_exprs(
 }
 
 fn parse_lambda_expr(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<Expr, String> {
-    let param = match tokens.next() {
-        Some(Token::Variable(name)) => name,
-        _ => return Err("Expected identifier after 'fun'".to_string()),
-    };
+    // parse lambda parameters as a vec
+    let mut params = Vec::new();
+    loop {
+        match tokens.peek() {
+            Some(Token::Variable(_)) => {
+                let Some(Token::Variable(var_name)) = tokens.next() else {
+                    panic!("Expected variable name");
+                };
+                params.push(var_name);
+            }
+            _ => break,
+        }
+    }
+
     match tokens.next() {
         Some(Token::Arrow) => (),
         _ => return Err("Expected '->' after parameter".to_string()),
     }
-    let body = Rc::new(parse_expr(tokens)?);
-    Ok(Expr::Lambda(param, body))
+    let body = parse_expr(tokens)?;
+
+    // unroll lambda parameters into nested lambdas
+    let mut lambda = body;
+    for param in params.into_iter().rev() {
+        lambda = Expr::Lambda(param, Rc::new(lambda));
+    }
+
+    Ok(lambda)
 }
 
 fn parse_if_expr(tokens: &mut Peekable<impl Iterator<Item = Token>>) -> Result<Expr, String> {
@@ -741,6 +758,23 @@ mod tests {
     #[test]
     fn test_simple_expr() {
         let tokens = lexer::tokenize("fun x -> (fun y -> plus x y)").unwrap();
+        let mut iter = tokens.into_iter().peekable();
+
+        assert_eq!(
+            parse_expr(&mut iter),
+            Ok(e_lambda!(
+                "x",
+                e_lambda!(
+                    "y",
+                    e_ap!(e_ap!(e_ident!("plus"), e_ident!("x")), e_ident!("y"))
+                )
+            ))
+        );
+    }
+
+    #[test]
+    fn test_multi_param_lambda() {
+        let tokens = lexer::tokenize("fun x y -> plus x y").unwrap();
         let mut iter = tokens.into_iter().peekable();
 
         assert_eq!(
