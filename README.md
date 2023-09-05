@@ -44,11 +44,14 @@ let rec fib n =
 
 ```ocaml
 let fizzbuzz n =
-    let fb n =
+    let fz = "Fizz"
+    in let bz = "Buzz"
+    in let fzbz = "FizzBuzz"
+    in let fb n =
         match (n % 3, n % 5) with
-        | (0, 0) -> putStrLn "FizzBuzz"
-        | (0, _) -> putStrLn "Fizz"
-        | (_, 0) -> putStrLn "Buzz"
+        | (0, 0) -> putStrLn fzbz
+        | (0, _) -> putStrLn fz
+        | (_, 0) -> putStrLn bz
         | _ -> putStrLn (intToString n)
     in
         discard (map (fun n -> fb (n + 1)) (range n))

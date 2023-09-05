@@ -114,7 +114,7 @@ impl Env {
                 | Nil -> ys
                 | Cons x xs -> Cons x (append xs ys)
             
-            let rec reverse = foldl (fun acc x -> Cons x acc) Nil
+            let reverse = foldl (fun acc x -> Cons x acc) Nil
 
             let range = 
                 let rec range_rec acc n =

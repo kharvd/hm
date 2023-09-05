@@ -73,7 +73,7 @@ impl Env {
         }
     }
 
-    pub fn resolve_value(&self, name: &String) -> Result<Option<Value>, String> {
+    pub fn resolve_value(&self, name: &str) -> Result<Option<Value>, String> {
         match self.vars.get(name) {
             Some(value) => Ok(value.borrow().clone()),
             None => Err(format!("Unknown identifier {}", name)),

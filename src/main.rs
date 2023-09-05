@@ -8,6 +8,7 @@ mod memory;
 mod parser;
 mod pattern;
 mod prelude;
+mod pretty;
 mod repl;
 mod typing;
 mod value;

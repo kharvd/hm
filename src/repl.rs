@@ -1,7 +1,12 @@
+use std::borrow::Borrow;
+
+use crate::ast::Statement;
 use crate::eval::StatementEval;
 use crate::memory;
 use crate::parser;
 use crate::typing::infer;
+use crate::value::RefValue;
+use crate::value::Value;
 use rustyline::error::ReadlineError;
 use rustyline::{DefaultEditor, Result};
 
@@ -62,6 +67,7 @@ enum ColonCommand<'a> {
     Type(&'a str),
     Debug(&'a str),
     DebugEval(&'a str),
+    Source(&'a str),
     Help,
 }
 
@@ -75,6 +81,8 @@ impl<'a> ColonCommand<'a> {
             Some(ColonCommand::DebugEval(&line[3..]))
         } else if line.starts_with(":d") {
             Some(ColonCommand::Debug(&line[3..]))
+        } else if line.starts_with(":s") {
+            Some(ColonCommand::Source(&line[3..]))
         } else {
             None
         }
@@ -155,10 +163,27 @@ impl Evaluator {
                     }
                 }
             }
+            ColonCommand::Source(line) => {
+                let result = self.env.resolve_value(line)?;
+                match &result {
+                    Some(value) => match value {
+                        Value::RefValue(ref_value) => match ref_value.borrow() {
+                            RefValue::Func { body, .. } => {
+                                let let_stmt = Statement::Let(line.to_string(), body.clone());
+                                Ok(format!("{}", let_stmt))
+                            }
+                            _ => Ok(format!("{}", value)),
+                        },
+                        _ => Ok(format!("{}", value)),
+                    },
+                    None => Err(format!("Unknown identifier {}", line)),
+                }
+            }
             ColonCommand::Help => Ok("Available commands:\n\
                     :t <expr> - typecheck expression\n\
                     :d <expr> - print expression / statement AST\n\
                     :e <expr> - evaluate expression without typechecking and print result\n\
+                    :s <name> - print source code of function or data type\n\
                     :h - show this help message"
                 .to_string()),
         }
