@@ -615,7 +615,7 @@ mod tests {
         assert_type_error!(
             &env,
             "fun x -> if x then 1 else neg",
-            "Failed to unify constraint int = (int -> int)"
+            "Failed to unify constraint int = int -> int"
         );
     }
 
@@ -722,7 +722,7 @@ mod tests {
         assert_type_error!(
             &env,
             "fun x -> match x with | Negative -> 0 | Nothing -> 1",
-            "Failed to unify constraint (Maybe t3) = Sign"
+            "Failed to unify constraint Maybe t3 = Sign"
         )
     }
 

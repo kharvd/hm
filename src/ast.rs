@@ -152,38 +152,74 @@ impl TypeExpr {
 
 impl Display for TypeExpr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            TypeExpr::Int => write!(f, "int"),
-            TypeExpr::Bool => write!(f, "bool"),
-            TypeExpr::Char => write!(f, "char"),
-            TypeExpr::Fun(param, body) => write!(f, "({} -> {})", param, body),
-            TypeExpr::TypeVar(s) => write!(f, "{}", s),
-            TypeExpr::Forall(vars, ty) => {
-                if vars.is_empty() {
-                    write!(f, "{}", ty)
-                } else {
-                    write!(
-                        f,
-                        "forall {} . {}",
-                        vars.into_iter().map(|v| format!("{}", v)).join(" "),
-                        ty
-                    )
-                }
+        pretty_print_type_expr(self, f, 0)
+    }
+}
+
+const PRECEDENCE_CONSTRUCTOR: usize = 2;
+const PRECEDENCE_FUN: usize = 1;
+
+fn pretty_print_type_expr(
+    ty: &TypeExpr,
+    f: &mut std::fmt::Formatter<'_>,
+    precedence: usize,
+) -> std::fmt::Result {
+    match ty {
+        TypeExpr::Int => write!(f, "int"),
+        TypeExpr::Bool => write!(f, "bool"),
+        TypeExpr::Char => write!(f, "char"),
+        TypeExpr::Fun(from_type, to_type) => {
+            let parenthesized = precedence >= PRECEDENCE_FUN;
+
+            if parenthesized {
+                write!(f, "(")?;
             }
-            TypeExpr::Constructor(name, args) => {
-                if args.is_empty() {
-                    write!(f, "{}", name)
-                } else {
-                    write!(
-                        f,
-                        "({} {})",
-                        name,
-                        args.iter()
-                            .map(|x| x.to_string())
-                            .collect::<Vec<_>>()
-                            .join(" ")
-                    )
+
+            pretty_print_type_expr(from_type, f, PRECEDENCE_FUN)?;
+            write!(f, " -> ")?;
+            pretty_print_type_expr(to_type, f, 0)?;
+
+            if parenthesized {
+                write!(f, ")")?;
+            }
+
+            Ok(())
+        }
+        TypeExpr::TypeVar(s) => write!(f, "{}", s),
+        TypeExpr::Forall(vars, ty) => {
+            if vars.is_empty() {
+                write!(f, "{}", ty)
+            } else {
+                write!(
+                    f,
+                    "forall {} . {}",
+                    vars.into_iter().map(|v| format!("{}", v)).join(" "),
+                    ty
+                )
+            }
+        }
+        TypeExpr::Constructor(name, args) => {
+            if args.is_empty() {
+                write!(f, "{}", name)
+            } else {
+                let parenthesized = precedence >= PRECEDENCE_CONSTRUCTOR;
+
+                if parenthesized {
+                    write!(f, "(")?;
                 }
+
+                write!(f, "{}", name)?;
+
+                for arg in args {
+                    write!(f, " ")?;
+                    pretty_print_type_expr(arg, f, PRECEDENCE_CONSTRUCTOR)?;
+                }
+
+                if parenthesized {
+                    write!(f, ")")?;
+                }
+
+                Ok(())
             }
         }
     }
@@ -218,7 +254,10 @@ impl Display for Statement {
 
 #[cfg(test)]
 mod tests {
-    use crate::{e_ap, e_ident, e_if, e_int, e_lambda, t_bool, t_forall, t_fun, t_int, t_type_var};
+    use crate::{
+        e_ap, e_ident, e_if, e_int, e_lambda, t_bool, t_constructor, t_forall, t_fun, t_int,
+        t_type_var,
+    };
 
     use super::*;
 
@@ -246,7 +285,36 @@ mod tests {
     #[test]
     fn display_type_expr() {
         let ty = t_fun!(t_fun!(t_int!(), t_type_var!("a")), t_bool!());
-        assert_eq!(format!("{}", ty), "((int -> a) -> bool)");
+        assert_eq!(format!("{}", ty), "(int -> a) -> bool");
+
+        let ty = t_constructor!(
+            "Constructor",
+            t_int!(),
+            t_bool!(),
+            t_fun!(t_int!(), t_int!())
+        );
+        assert_eq!(format!("{}", ty), "Constructor int bool (int -> int)");
+
+        let ty = t_fun!(
+            t_constructor!("Tuple2", t_type_var!("a"), t_type_var!("b")),
+            t_type_var!("a")
+        );
+        assert_eq!(format!("{}", ty), "Tuple2 a b -> a");
+
+        let ty = t_fun!(
+            t_fun!(
+                t_constructor!("Maybe", t_type_var!("a")),
+                t_constructor!("List", t_constructor!("Maybe", t_type_var!("b")))
+            ),
+            t_fun!(
+                t_constructor!("List", t_constructor!("Maybe", t_type_var!("a"))),
+                t_constructor!("List", t_constructor!("Maybe", t_type_var!("b")))
+            )
+        );
+        assert_eq!(
+            format!("{}", ty),
+            "(Maybe a -> List (Maybe b)) -> List (Maybe a) -> List (Maybe b)"
+        );
     }
 
     #[test]
@@ -264,7 +332,7 @@ mod tests {
             "f".to_string(),
             Rc::new(t_fun!(t_type_var!("a"), t_type_var!("a"))),
         );
-        assert_eq!(format!("{}", stmt), "val f : (a -> a)");
+        assert_eq!(format!("{}", stmt), "val f : a -> a");
     }
 
     #[test]
